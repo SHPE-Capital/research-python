@@ -118,6 +118,35 @@ def _data_audit(args: argparse.Namespace) -> int:
     return 1 if len(report.errors) else 0
 
 
+def _data_ticks(args: argparse.Namespace) -> int:
+    from shpe_research.data.ticks import download_ticks
+
+    summary = download_ticks(
+        _resolve_symbols(args), args.start, args.end, kinds=tuple(args.kinds.split(",")), feed=args.feed,
+        session=args.session, start_time=args.start_time, end_time=args.end_time, workers=args.workers,
+        force=args.force,
+    )
+    print(summary)
+    return 1 if summary.failed else 0
+
+
+def _data_tick_summary(args: argparse.Namespace) -> int:
+    from shpe_research.config import data_dir
+    from shpe_research.data.store import DataStore
+    from shpe_research.data.ticks import minute_summaries
+
+    symbols = _resolve_symbols(args)
+    store = DataStore()
+    quotes = store.read_ticks("quotes", symbols, args.start, args.end, args.feed)
+    trades = store.read_ticks("trades", symbols, args.start, args.end, args.feed)
+    summary = minute_summaries(quotes, trades)
+    out = args.out or data_dir() / "tick_summaries" / f"{'-'.join(symbols)}_{args.start}_{args.end}.parquet"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    summary.to_parquet(out, index=False)
+    print(f"{len(quotes):,} quotes and {len(trades):,} trades -> {len(summary):,} minute rows written to {out}")
+    return 0
+
+
 def _add_data(sub) -> None:
     data = sub.add_parser("data", help="download, audit and package market data")
     dsub = data.add_subparsers(dest="data_command", metavar="<data command>", required=True)
@@ -145,6 +174,27 @@ def _add_data(sub) -> None:
     p.add_argument("--feed", default="sip", choices=["sip", "iex"])
     p.add_argument("--out", type=Path, default=None, help="report directory (default <data dir>/audits/<time>)")
     p.set_defaults(handler=_data_audit)
+
+    p = dsub.add_parser("ticks", help="download quotes and/or trades into the local store (D3)")
+    _symbol_args(p)
+    p.add_argument("--from", dest="start", required=True)
+    p.add_argument("--to", dest="end", required=True)
+    p.add_argument("--kinds", default="quotes,trades", help="quotes, trades, or quotes,trades")
+    p.add_argument("--session", default="regular", choices=["regular", "extended"])
+    p.add_argument("--start-time", default=None, help="narrow each day's window, New York HH:MM")
+    p.add_argument("--end-time", default=None, help="narrow each day's window, New York HH:MM")
+    p.add_argument("--feed", default="sip", choices=["sip", "iex"])
+    p.add_argument("--workers", type=int, default=12)
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(handler=_data_ticks)
+
+    p = dsub.add_parser("tick-summary", help="per-minute spread, imbalance and signed volume from stored ticks (D3)")
+    _symbol_args(p)
+    p.add_argument("--from", dest="start", required=True)
+    p.add_argument("--to", dest="end", required=True)
+    p.add_argument("--feed", default="sip", choices=["sip", "iex"])
+    p.add_argument("--out", type=Path, default=None)
+    p.set_defaults(handler=_data_tick_summary)
 
 
 # ---------------------------------------------------------------- main

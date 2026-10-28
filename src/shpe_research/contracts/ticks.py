@@ -81,6 +81,23 @@ TRADE_SCHEMA = pa.schema(
 SCHEMAS = {"quotes": QUOTE_SCHEMA, "trades": TRADE_SCHEMA}
 COLUMNS = {"quotes": QUOTE_COLUMNS, "trades": TRADE_COLUMNS}
 
+# Per-minute summaries of quotes and trades (data/ticks.py:minute_summaries), joinable onto
+# 1-minute bars by (symbol, ts). Like a bar, a minute's summary is available at its end.
+TICK_SUMMARY_COLUMNS: dict[str, str] = {
+    "symbol": "str",
+    "ts": "utc",  # minute start
+    "ts_available": "utc",  # minute end
+    "quote_count": "int",
+    "spread_bps_mean": "float",  # mean of (ask - bid) / mid over the minute's quotes, in basis points
+    "spread_bps_median": "float",
+    "imbalance_mean": "float",  # mean of (bid_size - ask_size) / (bid_size + ask_size)
+    "mid_close": "float",  # last mid of the minute
+    "trade_count": "int",
+    "trade_volume": "int",
+    "buy_volume": "int",  # Lee-Ready: above the prevailing mid, or an uptick at the mid
+    "sell_volume": "int",  # below the prevailing mid, or a downtick at the mid
+}
+
 
 def _validate(kind: str, df: pd.DataFrame) -> None:
     problems = check_columns(df, COLUMNS[kind])

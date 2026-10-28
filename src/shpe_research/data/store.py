@@ -5,7 +5,8 @@ Layout under the data directory (RESEARCH_DATA_DIR, default ./data):
     bars/feed=sip/timeframe=1Min/adjustment=raw/symbol=AAPL/period=2026-10.parquet
     bars/feed=sip/timeframe=1Day/adjustment=split/symbol=AAPL/period=2026.parquet
     bars/manifest.json
-    ticks/...            (data/ticks.py)
+    ticks/feed=sip/kind=quotes/symbol=KO/date=2026-10-27.parquet   (data/ticks.py)
+    ticks/manifest.json
 
 A "unit" is one file: one symbol over one period. Intraday bars use New York
 calendar months; daily bars use years. Periods follow New York dates, so a
@@ -91,6 +92,24 @@ class BarUnit:
         return f"bars/{self.key}.parquet"
 
 
+@dataclass(frozen=True)
+class TickUnit:
+    """Quotes or trades for one symbol on one New York date."""
+
+    feed: str
+    kind: str
+    symbol: str
+    date: str  # YYYY-MM-DD
+
+    @property
+    def key(self) -> str:
+        return f"feed={self.feed}/kind={self.kind}/symbol={self.symbol}/date={self.date}"
+
+    @property
+    def relpath(self) -> str:
+        return f"ticks/{self.key}.parquet"
+
+
 class Manifest:
     """JSON index of stored units. Thread-safe; call flush() to persist pending updates."""
 
@@ -152,10 +171,28 @@ def write_parquet_atomic(path: Path, table: pa.Table) -> tuple[str, int]:
     return sha256_file(path), table.num_rows
 
 
+def _entry(relpath: str, sha: str, rows: int, start: pd.Timestamp, end: pd.Timestamp, complete: bool, **extra):
+    return {
+        "file": relpath,
+        "sha256": sha,
+        "rows": rows,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "complete": complete,
+        "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "contract_version": CONTRACT_VERSION,
+        **extra,
+    }
+
+
 class DataStore:
     def __init__(self, root: str | Path | None = None):
         self.root = Path(root) if root else data_dir()
         self.bars_manifest = Manifest(self.root / "bars" / MANIFEST)
+        self.ticks_manifest = Manifest(self.root / "ticks" / MANIFEST)
+
+    def manifests(self) -> dict[str, Manifest]:
+        return {"bars": self.bars_manifest, "ticks": self.ticks_manifest}
 
     # ------------------------------------------------------------ bars
 
@@ -170,16 +207,7 @@ class DataStore:
         validate_bars(bars)
         meta = BarMetadata(feed=unit.feed, timeframe=unit.timeframe, adjustment=unit.adjustment)
         sha, rows = write_parquet_atomic(self.root / unit.relpath, bars_to_table(bars, meta))
-        entry = {
-            "file": unit.relpath,
-            "sha256": sha,
-            "rows": rows,
-            "start": fetched_start.isoformat(),
-            "end": fetched_end.isoformat(),
-            "complete": complete,
-            "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            "contract_version": CONTRACT_VERSION,
-        }
+        entry = _entry(unit.relpath, sha, rows, fetched_start, fetched_end, complete)
         self.bars_manifest.set(unit.key, entry)
         return entry
 
@@ -227,15 +255,60 @@ class DataStore:
             bars = bars[bars["session"].isin(sessions)]
         return bars.sort_values(["symbol", "ts"], kind="stable").reset_index(drop=True)
 
+    # ------------------------------------------------------------ ticks
+
+    def write_tick_unit(
+        self, unit: TickUnit, table: pa.Table, fetched_start: pd.Timestamp, fetched_end: pd.Timestamp,
+        complete: bool, dropped: int = 0,
+    ) -> dict[str, Any]:
+        sha, rows = write_parquet_atomic(self.root / unit.relpath, table)
+        entry = _entry(unit.relpath, sha, rows, fetched_start, fetched_end, complete, dropped=dropped)
+        self.ticks_manifest.set(unit.key, entry)
+        return entry
+
+    def tick_unit_covers(self, unit: TickUnit, start: pd.Timestamp, end: pd.Timestamp) -> bool:
+        """Whether the stored unit was fetched over a window containing [start, end)."""
+        entry = self.ticks_manifest.get(unit.key)
+        return bool(
+            entry
+            and (self.root / entry["file"]).exists()
+            and pd.Timestamp(entry["start"]) <= start
+            and pd.Timestamp(entry["end"]) >= end
+        )
+
+    def read_ticks(self, kind: str, symbols: list[str], start, end, feed: str = "sip") -> pd.DataFrame:
+        """Stored quotes or trades for New York dates start..end inclusive, sorted by (symbol, ts)."""
+        from shpe_research.contracts.ticks import SCHEMAS
+
+        tables, missing = [], []
+        for symbol in symbols:
+            for day in pd.date_range(pd.Timestamp(start), pd.Timestamp(end), freq="D"):
+                unit = TickUnit(feed, kind, symbol, day.strftime("%Y-%m-%d"))
+                entry = self.ticks_manifest.get(unit.key)
+                if entry is None:
+                    continue  # weekends and holidays have no unit; downloads record every session
+                path = self.root / unit.relpath
+                if not path.exists():
+                    missing.append(unit.key)
+                    continue
+                tables.append(pq.read_table(path))
+        if missing:
+            raise StoreError("tick files listed in the manifest are missing:\n  " + "\n  ".join(missing))
+        if not tables:
+            return SCHEMAS[kind].empty_table().to_pandas()
+        df = pa.concat_tables(tables).to_pandas()
+        return df.sort_values(["symbol", "ts"], kind="stable").reset_index(drop=True)
+
     # ------------------------------------------------------------ integrity
 
     def verify(self) -> list[str]:
         """Problems found re-checking every manifest entry's file and checksum (empty list means clean)."""
         problems = []
-        for key, entry in self.bars_manifest.items():
-            path = self.root / entry["file"]
-            if not path.exists():
-                problems.append(f"{key}: file missing")
-            elif sha256_file(path) != entry["sha256"]:
-                problems.append(f"{key}: checksum mismatch")
+        for name, manifest in self.manifests().items():
+            for key, entry in manifest.items():
+                path = self.root / entry["file"]
+                if not path.exists():
+                    problems.append(f"{name}/{key}: file missing")
+                elif sha256_file(path) != entry["sha256"]:
+                    problems.append(f"{name}/{key}: checksum mismatch")
         return problems

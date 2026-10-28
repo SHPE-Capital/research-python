@@ -38,6 +38,31 @@ def raw_daily(bars: pd.DataFrame) -> pd.DataFrame:
     return daily
 
 
+def raw_ticks(start: str, minutes: int, seed: int = 0) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Raw quotes (about one a second, with nanosecond stamps and a few invalid ones) and trades."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    n = minutes * 60
+    ts = pd.Series(pd.date_range(start, periods=n, freq="1s")).astype("datetime64[ns, UTC]")
+    ts = ts + pd.to_timedelta(rng.integers(0, 999_999_999, n), unit="ns")
+    mid = 50 + np.cumsum(rng.normal(0, 0.005, n))
+    half = rng.choice([0.005, 0.01], n)
+    bid, ask = np.round(mid - half, 2), np.round(mid + half, 2)
+    bid[::97] = 0.0  # one-sided
+    ask[::89] = bid[::89] - 0.01  # crossed
+    quotes = pd.DataFrame({"t": ts.dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ").tolist(), "bp": bid, "ap": ask,
+                           "bs": rng.integers(1, 20, n), "as": rng.integers(1, 20, n), "bx": "V", "ax": "Q",
+                           "c": [["R"]] * n, "z": "A", "_ts": ts})
+    picks = np.sort(rng.choice(n, n // 3, replace=False))
+    trade_ts = ts.iloc[picks].reset_index(drop=True) + pd.Timedelta(milliseconds=1)
+    trades = pd.DataFrame({"t": trade_ts.dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ").tolist(),
+                           "p": np.round(mid[picks] + rng.choice([-0.01, 0.0, 0.01], len(picks)), 2),
+                           "s": rng.integers(1, 500, len(picks)), "x": "V", "c": [["@"]] * len(picks),
+                           "i": np.arange(len(picks)), "z": "A", "_ts": trade_ts})
+    return quotes, trades
+
+
 class FakeAlpaca:
     """Serves /v2/stocks/{symbol}/{bars|quotes|trades} from frames keyed by (kind, timeframe, symbol).
 
