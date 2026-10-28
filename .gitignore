@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# research-python: market data, run outputs and snapshots never go in git
+# (root-anchored so the src/shpe_research/data package is not ignored)
+/data/
+/runs/
+/snapshots/
+/mlruns/
