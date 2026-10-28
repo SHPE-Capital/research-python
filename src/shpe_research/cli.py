@@ -147,6 +147,26 @@ def _data_tick_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def _data_universe(args: argparse.Namespace) -> int:
+    from shpe_research.data.bars import download_bars
+    from shpe_research.data.universe import UniverseConfig, build_universe, default_output, required_downloads
+
+    cfg = UniverseConfig.from_yaml(args.config)
+    if args.download:
+        for call in required_downloads(cfg):
+            print(download_bars(**call, feed=cfg.feed, workers=args.workers))
+    result = build_universe(cfg)
+    path = result.write(args.out or default_output(cfg))
+    counts = result.manifest["counts"]
+    print(f"{counts['candidates']} candidates, {counts['excluded']} excluded, {counts['selected']} selected "
+          f"({counts['dev']} dev, {counts['held_out']} held out)")
+    for cell in result.manifest["cells"]:
+        short = f", short {cell['shortfall']}" if cell["shortfall"] else ""
+        print(f"  {cell['cell']}: {cell['selected']} of {cell['eligible']} eligible{short}")
+    print(f"Manifest written to {path}")
+    return 0
+
+
 def _add_data(sub) -> None:
     data = sub.add_parser("data", help="download, audit and package market data")
     dsub = data.add_subparsers(dest="data_command", metavar="<data command>", required=True)
@@ -195,6 +215,13 @@ def _add_data(sub) -> None:
     p.add_argument("--feed", default="sip", choices=["sip", "iex"])
     p.add_argument("--out", type=Path, default=None)
     p.set_defaults(handler=_data_tick_summary)
+
+    p = dsub.add_parser("universe", help="seeded liquidity x volatility universe with dev/held-out split (D4)")
+    p.add_argument("--config", type=Path, required=True, help="e.g. configs/universe/workshop_v0.yaml")
+    p.add_argument("--download", action="store_true", help="first download the bars the measurements need")
+    p.add_argument("--workers", type=int, default=12)
+    p.add_argument("--out", type=Path, default=None, help="manifest path (default <data dir>/universes/<name>.yaml)")
+    p.set_defaults(handler=_data_universe)
 
 
 # ---------------------------------------------------------------- main

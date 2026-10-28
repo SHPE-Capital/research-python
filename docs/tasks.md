@@ -27,7 +27,7 @@ statistics or systems design.
 | D1 | Alpaca bars downloader into the Parquet store | Int | C0 | `data/alpaca.py`, `data/store.py`, `data/bars.py` | Re-running is a no-op; manifest has checksums | Done |
 | D2 | Calendar, session tags, data audit | Beg–Int | C0 | `data/calendar.py`, `data/audit.py` | Audit report for a month of data | Done |
 | D3 | Quotes/trades downloader plus minute summaries | Int | D1 | `data/ticks.py` | One week for 5 symbols | Done |
-| D4 | Universe builder: liquidity x volatility cells, seeded dev/held-out split | Beg | D1, D2 | `data/universe.py`, `configs/universe/` | Reproducible manifest | In progress (Juan) |
+| D4 | Universe builder: liquidity x volatility cells, seeded dev/held-out split | Beg | D1, D2 | `data/universe.py`, `configs/universe/` | Reproducible manifest | Done |
 | D5 | Frozen, versioned workshop dataset | Beg | D1, D4 | `data/snapshot.py` | Build, verify and load a snapshot | In progress (Juan) |
 | D6 | Corporate actions: confirm split gaps flagged by the audit | Beg–Int | D1, D2 | `data/corporate_actions.py` | `tests/todo/test_experiments_todo.py::test_corporate_actions` | Open |
 
