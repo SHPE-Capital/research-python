@@ -3,6 +3,8 @@
     data: {source: fixture, symbols: [...], start: ..., end: ..., seed: 7}
     data: {source: parquet, path: some/file_or_directory}
     data: {source: store, symbols: [...], start: ..., end: ..., timeframe: 1Min, feed: sip, adjustment: raw}
+    data: {source: snapshot, path: snapshots/workshop-v0.zip, role: dev, start: ..., end: ...}
+          (role: all | dev | held_out | context; or list `symbols` explicitly)
 """
 
 from __future__ import annotations
@@ -41,10 +43,25 @@ def _store(cfg: dict[str, Any]) -> pd.DataFrame:
     )
 
 
+def _snapshot(cfg: dict[str, Any]) -> pd.DataFrame:
+    from shpe_research.data.snapshot import load_snapshot
+
+    snap = load_snapshot(cfg["path"])
+    symbols = cfg.get("symbols") or snap.symbols(cfg.get("role", "all"))
+    return snap.bars(
+        timeframe=cfg.get("timeframe", "1Min"),
+        adjustment=cfg.get("adjustment", "raw"),
+        symbols=[s.upper() for s in symbols],
+        start=cfg.get("start"),
+        end=cfg.get("end"),
+    )
+
+
 SOURCES: dict[str, Callable[[dict[str, Any]], pd.DataFrame]] = {
     "fixture": _fixture,
     "parquet": _parquet,
     "store": _store,
+    "snapshot": _snapshot,
 }
 
 

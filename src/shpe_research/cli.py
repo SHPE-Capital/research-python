@@ -167,6 +167,59 @@ def _data_universe(args: argparse.Namespace) -> int:
     return 0
 
 
+def _series(value: str) -> tuple[tuple[str, str], ...]:
+    pairs = [item.split(":") for item in value.split(",") if item]
+    return tuple((tf, adj) for tf, adj in pairs)
+
+
+def _snapshot_build(args: argparse.Namespace) -> int:
+    from shpe_research.data.snapshot import build_snapshot, load_snapshot
+
+    folder = build_snapshot(
+        args.name, args.start, args.end, symbols=args.symbols, universe=args.universe,
+        extra_symbols=args.extra_symbols, series=args.series, feed=args.feed,
+    )
+    snap = load_snapshot(folder)
+    rows = sum(f["rows"] for f in snap.manifest["files"])
+    print(f"Snapshot {snap.name}: {len(snap.symbols())} symbols, {rows:,} rows, fingerprint {snap.fingerprint()[:12]}")
+    print(f"Written to {folder} and {folder.with_suffix('.zip')}")
+    print("Members-only: it contains Alpaca market data. Do not commit or publish it.")
+    return 0
+
+
+def _snapshot_verify(args: argparse.Namespace) -> int:
+    from shpe_research.data.snapshot import load_snapshot, verify_snapshot
+
+    problems = verify_snapshot(args.path)
+    if problems:
+        print("\n".join(problems))
+        return 1
+    snap = load_snapshot(args.path)
+    print(f"Snapshot {snap.name} verified: {len(snap.manifest['files'])} files, fingerprint {snap.fingerprint()[:12]}")
+    return 0
+
+
+def _add_snapshot(dsub) -> None:
+    snap = dsub.add_parser("snapshot", help="build or verify a frozen dataset snapshot (D5)")
+    ssub = snap.add_subparsers(dest="snapshot_command", metavar="<snapshot command>", required=True)
+
+    p = ssub.add_parser("build", help="copy bars from the store into snapshots/<name>/ and a zip")
+    p.add_argument("--name", required=True, help="immutable; use a new name for a new version")
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--universe", type=Path, help="D4 manifest; its dev and held-out names become the symbols")
+    source.add_argument("--symbols", type=_symbols)
+    p.add_argument("--extra-symbols", type=_symbols, default=[], help="context symbols such as SPY")
+    p.add_argument("--from", dest="start", required=True)
+    p.add_argument("--to", dest="end", required=True)
+    p.add_argument("--series", type=_series, default="1Min:raw,1Day:split", help="timeframe:adjustment list")
+    p.add_argument("--feed", default="sip", choices=["sip", "iex"])
+    p.set_defaults(handler=_snapshot_build)
+
+    p = ssub.add_parser("verify", help="check a snapshot folder or zip against its checksums")
+    p.add_argument("path", type=Path)
+    p.set_defaults(handler=_snapshot_verify)
+
+
 def _add_data(sub) -> None:
     data = sub.add_parser("data", help="download, audit and package market data")
     dsub = data.add_subparsers(dest="data_command", metavar="<data command>", required=True)
@@ -222,6 +275,8 @@ def _add_data(sub) -> None:
     p.add_argument("--workers", type=int, default=12)
     p.add_argument("--out", type=Path, default=None, help="manifest path (default <data dir>/universes/<name>.yaml)")
     p.set_defaults(handler=_data_universe)
+
+    _add_snapshot(dsub)
 
 
 # ---------------------------------------------------------------- main
