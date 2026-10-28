@@ -150,6 +150,23 @@ class TickDownloadSummary:
         return text
 
 
+TickJob = tuple[TickUnit, pd.Timestamp, pd.Timestamp, bool]  # unit, window start, window end, whole session
+
+
+def _plan_jobs(symbols, start, end, kinds, feed, session, start_time, end_time, now) -> list[TickJob]:
+    jobs = []
+    for day in get_calendar().sessions(start, end):
+        full_start, full_end = session_window(day, session)
+        w_start, w_end = session_window(day, session, start_time, end_time)
+        w_end = sip_safe_end(w_end, now) if feed == "sip" else min(w_end, now)
+        if w_end <= w_start:
+            continue
+        complete = w_start <= full_start and w_end >= full_end
+        date = day.strftime("%Y-%m-%d")
+        jobs += [(TickUnit(feed, kind, s.upper(), date), w_start, w_end, complete) for s in symbols for kind in kinds]
+    return jobs
+
+
 def download_ticks(
     symbols: list[str],
     start,
@@ -168,23 +185,14 @@ def download_ticks(
     """Fetch quotes and/or trades for each session in New York dates start..end that the store does not cover."""
     store = store or DataStore()
     now = now if now is not None else pd.Timestamp.now(tz="UTC")
-    full = {d: session_window(d, session) for d in get_calendar().sessions(start, end)}
-    jobs: list[tuple[TickUnit, pd.Timestamp, pd.Timestamp, bool]] = []
-    summary = TickDownloadSummary()
-    for day, (full_start, full_end) in full.items():
-        w_start, w_end = session_window(day, session, start_time, end_time)
-        w_end = sip_safe_end(w_end, now) if feed == "sip" else min(w_end, now)
-        if w_end <= w_start:
-            continue
-        complete = w_start <= full_start and w_end >= full_end
-        for symbol in symbols:
-            for kind in kinds:
-                unit = TickUnit(feed, kind, symbol.upper(), day.strftime("%Y-%m-%d"))
-                summary.units += 1
-                if not force and store.tick_unit_covers(unit, w_start, w_end):
-                    summary.skipped += 1
-                else:
-                    jobs.append((unit, w_start, w_end, complete))
+    planned = _plan_jobs(symbols, start, end, kinds, feed, session, start_time, end_time, now)
+    summary = TickDownloadSummary(units=len(planned))
+    jobs = []
+    for job in planned:
+        if not force and store.tick_unit_covers(job[0], job[1], job[2]):
+            summary.skipped += 1
+        else:
+            jobs.append(job)
     if not jobs:
         return summary
 
