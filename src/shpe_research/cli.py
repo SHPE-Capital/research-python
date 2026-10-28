@@ -101,6 +101,23 @@ def _data_verify(args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+def _data_audit(args: argparse.Namespace) -> int:
+    from datetime import UTC, datetime
+
+    from shpe_research.config import data_dir
+    from shpe_research.data.audit import audit_bars
+    from shpe_research.data.store import DataStore
+
+    bars = DataStore().read_bars(_resolve_symbols(args), args.start, args.end, timeframe=args.timeframe,
+                                 feed=args.feed, adjustment=args.adjustment)
+    report = audit_bars(bars, args.start, args.end, timeframe=args.timeframe)
+    out = args.out or data_dir() / "audits" / datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    report.write(out)
+    print(report.to_markdown())
+    print(f"Audit written to {out}")
+    return 1 if len(report.errors) else 0
+
+
 def _add_data(sub) -> None:
     data = sub.add_parser("data", help="download, audit and package market data")
     dsub = data.add_subparsers(dest="data_command", metavar="<data command>", required=True)
@@ -118,6 +135,16 @@ def _add_data(sub) -> None:
 
     p = dsub.add_parser("verify", help="re-check stored files against manifest checksums")
     p.set_defaults(handler=_data_verify)
+
+    p = dsub.add_parser("audit", help="coverage, duplicates, invalid prices and split gaps in stored bars (D2)")
+    _symbol_args(p)
+    p.add_argument("--from", dest="start", required=True)
+    p.add_argument("--to", dest="end", required=True)
+    p.add_argument("--timeframe", default="1Min", choices=["1Min", "5Min", "15Min", "30Min", "1Hour"])
+    p.add_argument("--adjustment", default="raw")
+    p.add_argument("--feed", default="sip", choices=["sip", "iex"])
+    p.add_argument("--out", type=Path, default=None, help="report directory (default <data dir>/audits/<time>)")
+    p.set_defaults(handler=_data_audit)
 
 
 # ---------------------------------------------------------------- main
