@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from shpe_research.contracts.base import to_utc_ns
+
+HELLO = Path(__file__).parents[1] / "configs" / "experiments" / "hello_model.yaml"
 
 
 def make_bars(symbol: str = "AAA", n: int = 60, start: str = "2026-10-01T13:30:00Z", seed: int = 0) -> pd.DataFrame:
