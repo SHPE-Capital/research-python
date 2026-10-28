@@ -7,7 +7,7 @@ Copy `hello_model.yaml` to start a new one.
 |---|---|
 | `name` | Run directory suffix: `runs/<timestamp>-<name>/` |
 | `seed` | Passed to the model |
-| `data` | Where bars come from. `source: fixture` (synthetic; `symbols`, `start`, `end`, `seed`, `signal_strength`) or `source: parquet` (`path` to a contract bars file). The `store` and `snapshot` sources are added with D1 and D5. |
+| `data` | Where bars come from. `source: fixture` (synthetic; `symbols`, `start`, `end`, `seed`, `signal_strength`), `source: parquet` (`path` to a contract bars file), or `source: store` (`symbols`, `start`, `end`, optional `timeframe`, `feed`, `adjustment`) for bars downloaded with `shpe data bars`. The `snapshot` source arrives with D5. |
 | `session` | Which bars to use: `regular`, `pre`, `post` or `all` |
 | `features` | List of `{type: <feature_type>, ...params}` from the feature registry |
 | `label` | `forward_return` with `horizon_minutes`, `target` (`sign` or `value`) and `sample_every_minutes` |

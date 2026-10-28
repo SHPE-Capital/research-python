@@ -2,6 +2,7 @@
 
     data: {source: fixture, symbols: [...], start: ..., end: ..., seed: 7}
     data: {source: parquet, path: some/file_or_directory}
+    data: {source: store, symbols: [...], start: ..., end: ..., timeframe: 1Min, feed: sip, adjustment: raw}
 """
 
 from __future__ import annotations
@@ -27,9 +28,23 @@ def _parquet(cfg: dict[str, Any]) -> pd.DataFrame:
     return bars.sort_values(["symbol", "ts"], kind="stable").reset_index(drop=True)
 
 
+def _store(cfg: dict[str, Any]) -> pd.DataFrame:
+    from shpe_research.data.store import DataStore
+
+    return DataStore(cfg.get("root")).read_bars(
+        [s.upper() for s in cfg["symbols"]],
+        cfg["start"],
+        cfg["end"],
+        timeframe=cfg.get("timeframe", "1Min"),
+        feed=cfg.get("feed", "sip"),
+        adjustment=cfg.get("adjustment", "raw"),
+    )
+
+
 SOURCES: dict[str, Callable[[dict[str, Any]], pd.DataFrame]] = {
     "fixture": _fixture,
     "parquet": _parquet,
+    "store": _store,
 }
 
 

@@ -4,7 +4,7 @@ name: hello_model
 seed: 7
 
 data:
-  source: fixture          # fixture | parquet (store and snapshot sources arrive with D1 and D5)
+  source: fixture          # fixture | parquet | store (snapshot arrives with D5)
   symbols: [AAA, BBB, CCC, DDD, EEE, FFF]
   start: "2026-03-02"
   end: "2026-08-28"

@@ -24,7 +24,7 @@ statistics or systems design.
 
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
-| D1 | Alpaca bars downloader into the Parquet store | Int | C0 | `data/alpaca.py`, `data/store.py`, `data/bars.py` | Re-running is a no-op; manifest has checksums | In progress (Juan) |
+| D1 | Alpaca bars downloader into the Parquet store | Int | C0 | `data/alpaca.py`, `data/store.py`, `data/bars.py` | Re-running is a no-op; manifest has checksums | Done |
 | D2 | Calendar, session tags, data audit | Beg–Int | C0 | `data/calendar.py`, `data/audit.py` | Audit report for a month of data | In progress (Juan) |
 | D3 | Quotes/trades downloader plus minute summaries | Int | D1 | `data/ticks.py` | One week for 5 symbols | In progress (Juan) |
 | D4 | Universe builder: liquidity x volatility cells, seeded dev/held-out split | Beg | D1, D2 | `data/universe.py`, `configs/universe/` | Reproducible manifest | In progress (Juan) |

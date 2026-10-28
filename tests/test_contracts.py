@@ -38,7 +38,8 @@ def test_bars_problems_are_all_reported(bars):
     with pytest.raises(ContractError) as err:
         validate_bars(broken)
     text = str(err.value)
-    assert "duplicate" in text and "sorted" in text and "ts_available" in text and "lunch" in text
+    for expected in ("duplicate", "sorted", "ts_available", "lunch"):
+        assert expected in text
 
 
 def test_bars_require_nanosecond_utc(bars):
