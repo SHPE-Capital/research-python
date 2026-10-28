@@ -1,0 +1,29 @@
+# C0 hello model: logistic regression predicting whether the next 30 minutes' return is positive.
+# Runs fully offline on synthetic fixture bars:  uv run shpe run configs/experiments/hello_model.yaml
+name: hello_model
+seed: 7
+
+data:
+  source: fixture          # fixture | parquet (store and snapshot sources arrive with D1 and D5)
+  symbols: [AAA, BBB, CCC, DDD, EEE, FFF]
+  start: "2026-03-02"
+  end: "2026-08-28"
+
+session: regular           # regular | pre | post | all
+
+features:
+  - {type: past_return, window: 5}
+  - {type: past_return, window: 30}
+  - {type: minute_of_day}
+
+label:
+  type: forward_return
+  horizon_minutes: 30
+  target: sign             # sign -> classify fwd_return > 0; value -> regress fwd_return
+  sample_every_minutes: 15 # one decision per symbol every 15 minutes, to limit overlapping labels
+
+split: {train: 0.6, validation: 0.2, test: 0.2, gap_days: 0}
+
+model:
+  type: logistic
+  params: {C: 1.0}
