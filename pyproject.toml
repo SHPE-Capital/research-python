@@ -43,9 +43,12 @@ packages = ["src/shpe_research"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# pyarrow's pandas conversion still calls Series.values on tz-aware columns (pandas 3.1 deprecation).
+filterwarnings = ["ignore:Series.values returning an ndarray that drops timezone:DeprecationWarning",
+                  "ignore:Series.values returning an ndarray that drops timezone"]
 
 [tool.ruff]
-line-length = 110
+line-length = 120
 src = ["src", "tests"]
 
 [tool.ruff.lint]
