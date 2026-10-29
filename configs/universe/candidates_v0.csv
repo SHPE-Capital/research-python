@@ -1,0 +1,202 @@
+# Starter candidate list (v0): liquid US common stocks with GICS sectors, as known in mid-2026.
+# Verify tickers before relying on it: names get acquired, delisted or renamed, and the audit and
+# universe manifest report symbols with no data. It is mostly large caps, so a real lower-liquidity
+# half needs mid caps added. Selecting from today's survivors is a disclosed limitation.
+symbol,sector
+AAPL,Information Technology
+MSFT,Information Technology
+NVDA,Information Technology
+AVGO,Information Technology
+ORCL,Information Technology
+CRM,Information Technology
+ADBE,Information Technology
+AMD,Information Technology
+CSCO,Information Technology
+ACN,Information Technology
+INTC,Information Technology
+QCOM,Information Technology
+TXN,Information Technology
+IBM,Information Technology
+MU,Information Technology
+AMAT,Information Technology
+NOW,Information Technology
+INTU,Information Technology
+ADI,Information Technology
+LRCX,Information Technology
+KLAC,Information Technology
+SNPS,Information Technology
+CDNS,Information Technology
+PANW,Information Technology
+ANET,Information Technology
+FTNT,Information Technology
+MCHP,Information Technology
+ON,Information Technology
+HPQ,Information Technology
+DELL,Information Technology
+AKAM,Information Technology
+TER,Information Technology
+SWKS,Information Technology
+GOOGL,Communication Services
+META,Communication Services
+NFLX,Communication Services
+DIS,Communication Services
+CMCSA,Communication Services
+T,Communication Services
+VZ,Communication Services
+TMUS,Communication Services
+TTWO,Communication Services
+AMZN,Consumer Discretionary
+TSLA,Consumer Discretionary
+HD,Consumer Discretionary
+MCD,Consumer Discretionary
+NKE,Consumer Discretionary
+SBUX,Consumer Discretionary
+LOW,Consumer Discretionary
+BKNG,Consumer Discretionary
+TJX,Consumer Discretionary
+CMG,Consumer Discretionary
+F,Consumer Discretionary
+GM,Consumer Discretionary
+MAR,Consumer Discretionary
+ROST,Consumer Discretionary
+DPZ,Consumer Discretionary
+ULTA,Consumer Discretionary
+BBY,Consumer Discretionary
+EBAY,Consumer Discretionary
+ETSY,Consumer Discretionary
+DECK,Consumer Discretionary
+RL,Consumer Discretionary
+LULU,Consumer Discretionary
+YUM,Consumer Discretionary
+WMT,Consumer Staples
+PG,Consumer Staples
+KO,Consumer Staples
+PEP,Consumer Staples
+COST,Consumer Staples
+MDLZ,Consumer Staples
+CL,Consumer Staples
+MO,Consumer Staples
+PM,Consumer Staples
+KHC,Consumer Staples
+GIS,Consumer Staples
+KR,Consumer Staples
+HSY,Consumer Staples
+CLX,Consumer Staples
+KMB,Consumer Staples
+STZ,Consumer Staples
+TSN,Consumer Staples
+SJM,Consumer Staples
+UNH,Health Care
+JNJ,Health Care
+LLY,Health Care
+PFE,Health Care
+MRK,Health Care
+ABBV,Health Care
+TMO,Health Care
+ABT,Health Care
+BMY,Health Care
+AMGN,Health Care
+GILD,Health Care
+CVS,Health Care
+MDT,Health Care
+ISRG,Health Care
+VRTX,Health Care
+REGN,Health Care
+ZTS,Health Care
+BIIB,Health Care
+DXCM,Health Care
+HCA,Health Care
+CI,Health Care
+HUM,Health Care
+MRNA,Health Care
+JPM,Financials
+BAC,Financials
+WFC,Financials
+C,Financials
+GS,Financials
+MS,Financials
+SCHW,Financials
+BLK,Financials
+AXP,Financials
+USB,Financials
+PNC,Financials
+TFC,Financials
+COF,Financials
+MET,Financials
+PRU,Financials
+AIG,Financials
+ALL,Financials
+CB,Financials
+ICE,Financials
+CME,Financials
+SPGI,Financials
+V,Financials
+MA,Financials
+PYPL,Financials
+CAT,Industrials
+DE,Industrials
+BA,Industrials
+HON,Industrials
+UPS,Industrials
+GE,Industrials
+LMT,Industrials
+RTX,Industrials
+MMM,Industrials
+UNP,Industrials
+CSX,Industrials
+NSC,Industrials
+FDX,Industrials
+DAL,Industrials
+UAL,Industrials
+LUV,Industrials
+WM,Industrials
+EMR,Industrials
+ETN,Industrials
+ITW,Industrials
+GD,Industrials
+NOC,Industrials
+XOM,Energy
+CVX,Energy
+COP,Energy
+SLB,Energy
+EOG,Energy
+OXY,Energy
+PSX,Energy
+MPC,Energy
+VLO,Energy
+HAL,Energy
+DVN,Energy
+KMI,Energy
+WMB,Energy
+NEE,Utilities
+DUK,Utilities
+SO,Utilities
+D,Utilities
+AEP,Utilities
+EXC,Utilities
+SRE,Utilities
+XEL,Utilities
+PCG,Utilities
+ED,Utilities
+AMT,Real Estate
+PLD,Real Estate
+CCI,Real Estate
+EQIX,Real Estate
+O,Real Estate
+SPG,Real Estate
+PSA,Real Estate
+WELL,Real Estate
+DLR,Real Estate
+VICI,Real Estate
+LIN,Materials
+APD,Materials
+SHW,Materials
+FCX,Materials
+NEM,Materials
+DOW,Materials
+DD,Materials
+ECL,Materials
+NUE,Materials
+ALB,Materials
+MOS,Materials
+CF,Materials

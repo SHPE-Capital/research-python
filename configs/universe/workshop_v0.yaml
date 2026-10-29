@@ -1,0 +1,26 @@
+# Universe for the workshop and R1, following Christopher's ORB plan (section 3).
+#   uv run shpe data universe --config configs/universe/workshop_v0.yaml --download
+# Thresholds are frozen BEFORE looking at any strategy result; relax them only in the documented order below.
+name: workshop_v0
+candidates: candidates_v0.csv       # relative to this file
+as_of: "2026-10-01"                 # measurements use the sessions strictly before this date
+window_sessions: 60
+feed: sip
+
+screens:
+  min_median_close: 10              # dollars
+  min_median_dollar_volume: 25000000
+  min_morning_coverage: 0.95        # share of 09:30-11:00 minutes with a bar; null skips (no minute bars needed)
+
+cells:
+  liquidity_bins: 2                 # lower / higher median dollar volume
+  volatility_bins: 3                # low / middle / high, within each liquidity bin
+  per_cell: 10
+  held_out_per_cell: 2              # the rest are development names
+
+sector_cap: 15
+seed: 20261018
+
+# If a cell cannot be filled, it stays short and the shortfall is reported. Relaxation order, if the team
+# agrees before any return testing: 1) sector_cap 15 -> 20, 2) min_morning_coverage 0.95 -> 0.90.
+# Cells are never filled by choosing profitable names.
