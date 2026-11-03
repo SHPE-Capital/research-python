@@ -1,0 +1,38 @@
+"""{{class_name}} feature (scaffolded by `shpe new feature`).
+
+TODO: replace this placeholder with the real definition. Timing: the value on a row uses that bar and earlier
+bars only, so it is known at the row's ts_available.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+from shpe_research.features.base import Feature, register_feature
+
+
+@register_feature
+class {{class_name}}(Feature):
+    """TODO: describe the feature, its units, and what is NaN.
+
+    Placeholder: log return of the close over the last `window` bars. NaN for the first `window` rows.
+    """
+
+    feature_type = "{{name}}"
+    requires = ("close", "ts_available")
+
+    def __init__(self, window: int = 1):
+        if window <= 0:
+            raise ValueError("window must be positive")
+        self.window = int(window)
+
+    @property
+    def name(self) -> str:
+        return f"{{name}}_{self.window}"
+
+    def compute(self, bars: pd.DataFrame) -> pd.Series:
+        close = bars["close"].to_numpy(dtype=float)
+        out = np.full(len(close), np.nan)
+        out[self.window :] = np.log(close[self.window :] / close[: -self.window])
+        return pd.Series(out, index=bars.index)
