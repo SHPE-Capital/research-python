@@ -92,7 +92,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [C1a](handoff/tasks/C1a.md) | Pipeline stages, registries and package skeleton | Adv | ADRs 0002–0005, migration PR | `pipeline/`, `experiments/runner.py`, `contracts/candidates.py`, `events/types.py`, `trade/types.py`, empty package skeletons | Registry tests pass; hello golden unchanged | Done |
-| [C1b](handoff/tasks/C1b.md) | Events and candidates layer | Int–Adv | C1a, C1o | `contracts/candidates.py`, `events/samplers.py`, `events/thresholds.py`, `events/breakouts.py` | `decisions: {type: session_close}` runs end to end | Open |
+| [C1b](handoff/tasks/C1b.md) | Events and candidates layer | Int–Adv | C1a, C1o | `contracts/candidates.py`, `events/samplers.py`, `events/thresholds.py`, `events/breakouts.py` | `decisions: {type: session_close}` runs end to end | Done |
 | [C1c](handoff/tasks/C1c.md) | Label registry | Int | C1a; T1 for `triple_barrier` | `labels/base.py`, `labels/realized_var.py`, `labels/triple_barrier.py` | Label tests pass; hello golden unchanged | Open |
 | [C1d](handoff/tasks/C1d.md) | Context symbols and cross-sectional transforms | Int–Adv | C1a, C1o | `features/base.py` (`context`), `transforms/` | `context_symbols: [SPY]` config runs; contract bump reviewed | Open |
 | [C1e](handoff/tasks/C1e.md) | Daily frequency alongside minute bars | Int | C1a, C1o | `data/resample.py`, `features/daily/` | Daily config runs with the hello model | Open |
@@ -112,7 +112,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [T1](handoff/tasks/T1.md) | Exit policies and trade simulator | Adv | C1a, C1o | `trade/types.py`, `trade/exits.py`, `trade/simulate.py` | Simulator and fill tests pass; hello golden unchanged | Open |
-| [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Open |
+| [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Done (simulate_trades wiring waits on T1) |
 | [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Open |
 | [T4](handoff/tasks/T4.md) | Risk limits | Int | C1a | `trade/risk.py` | `simulate_trades(..., risk=...)` rejects with reasons | Open |
 | [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Open |
