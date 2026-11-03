@@ -57,3 +57,34 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.importlinter]
+root_package = "shpe_research"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture"
+type = "layers"
+containers = ["shpe_research"]
+layers = [
+    "cli",
+    "experiments | (scaffold)",
+    "pipeline | deploy | testing",
+    "strategies | portfolio | analysis",
+    "evaluation | models | validation | events | labels",
+    "features | transforms | trade",
+    "data",
+    "contracts | config",
+]
+# Known upward imports that already exist as function-local imports in code owned by other packets.
+# Each entry is debt: remove it when its owner fixes the import (see the C1l report).
+ignore_imports = [
+    "shpe_research.contracts.model -> shpe_research.models",
+    "shpe_research.contracts.model -> shpe_research.config",
+    "shpe_research.pipeline.stages -> shpe_research.experiments.sources",
+]
+
+[[tool.importlinter.contracts]]
+name = "Trade layer does not import events"
+type = "forbidden"
+source_modules = ["shpe_research.trade"]
+forbidden_modules = ["shpe_research.events"]
