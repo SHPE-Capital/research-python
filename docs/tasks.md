@@ -75,7 +75,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [E1](handoff/tasks/E1.md) | IC decay, turnover, cost-adjusted P&L, by-group breakdowns | Int | C1a; L1 (for decay) | `evaluation/trading.py` | `test_trading_metrics`; written into every report | Open |
-| [E2](handoff/tasks/E2.md) | Block bootstrap, deflated Sharpe, probability of backtest overfitting | Adv | | `evaluation/stats.py` | `test_stats` | Open |
+| [E2](handoff/tasks/E2.md) | Block bootstrap, deflated Sharpe, probability of backtest overfitting | Adv | | `evaluation/stats.py` | `test_stats` | Done |
 
 ## Models and experiments
 
