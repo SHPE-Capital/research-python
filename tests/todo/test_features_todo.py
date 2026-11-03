@@ -80,9 +80,8 @@ def test_opening_range():
     assert_no_lookahead(OpeningRangeBreakoutDistance(), bars)
 
 
-@pytest.mark.skip(reason="TODO(F5)")
 def test_regime_features():
-    from shpe_research.features.regime import RegimeFeature
+    from shpe_research.features.regime.regime import RegimeFeature
 
     reverting = synthetic_bars(symbols=["AAA"], start="2026-04-01", end="2026-04-30", signal_strength=0.5)
     assert RegimeFeature("variance_ratio", 60).compute(reverting).mean() < 1
