@@ -97,7 +97,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | [C1d](handoff/tasks/C1d.md) | Context symbols and cross-sectional transforms | Int–Adv | C1a, C1o | `features/base.py` (`context`), `transforms/` | `context_symbols: [SPY]` config runs; contract bump reviewed | Open |
 | [C1e](handoff/tasks/C1e.md) | Daily frequency alongside minute bars | Int | C1a, C1o | `data/resample.py`, `features/daily/` | Daily config runs with the hello model | Open |
 | [C1f](handoff/tasks/C1f.md) | Fit schemes | Adv | C1a, V1 | `validation/schemes.py` | Hello model runs with each scheme; manifest records folds | Open |
-| [C1g](handoff/tasks/C1g.md) | Pluggable data sources | Int | C1a, C1h | `data/sources/` | Source tests pass; configs and goldens unchanged | Open |
+| [C1g](handoff/tasks/C1g.md) | Pluggable data sources | Int | C1a, C1h | `data/sources/` | Source tests pass; configs and goldens unchanged | Done |
 | [C1h](handoff/tasks/C1h.md) | Typed config schema and `StrategySpec` | Int | C1a | `config/` | Runner loads through `load_config`; golden unchanged | Open |
 | [C1i](handoff/tasks/C1i.md) | Baselines, permutation importance and by-era report sections | Int | C1a, E1 | `evaluation/baselines.py`, `evaluation/importance.py`, `evaluation/by_era.py` | Three sections render in the hello report | Open |
 | [C1j](handoff/tasks/C1j.md) | `shpe new` scaffolding framework | Beg–Int | C1a, C1k | `scaffold/`, `cli.py` (`new`) | `shpe new feature returns/demo --dry-run` prints the expected paths | Open |
