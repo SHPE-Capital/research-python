@@ -15,8 +15,8 @@ from shpe_research.data.snapshot import build_snapshot, load_snapshot, verify_sn
 from shpe_research.data.store import BarUnit, DataStore, period_window
 from shpe_research.experiments.runner import ExperimentConfig, run_experiment
 
-from .conftest import HELLO
-from .fake_alpaca import raw_daily
+from ..conftest import HELLO
+from ..fakes.fake_alpaca import raw_daily
 
 START, END = "2026-09-01", "2026-09-30"
 

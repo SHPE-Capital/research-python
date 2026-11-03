@@ -78,7 +78,7 @@ def test_split_by_day_is_chronological_with_gap():
 
 
 def _small_config(**overrides) -> ExperimentConfig:
-    cfg = ExperimentConfig.from_yaml(Path(__file__).parents[1] / "configs/experiments/hello_model.yaml")
+    cfg = ExperimentConfig.from_yaml(Path(__file__).parents[2] / "configs/experiments/hello_model.yaml")
     cfg.data = {**SMALL, **overrides}
     return cfg
 

@@ -16,7 +16,7 @@ from shpe_research.data.ratelimit import RateLimiter
 from shpe_research.data.store import BarUnit, DataStore, StoreError
 from shpe_research.experiments.sources import load_bars
 
-from .fake_alpaca import FakeAlpaca, raw_bars, raw_daily
+from ..fakes.fake_alpaca import FakeAlpaca, raw_bars, raw_daily
 
 LATER = pd.Timestamp("2026-10-28T12:00Z")
 

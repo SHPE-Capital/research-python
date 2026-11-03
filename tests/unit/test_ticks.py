@@ -12,7 +12,7 @@ from shpe_research.data import ticks as ticks_module
 from shpe_research.data.store import DataStore, TickUnit
 from shpe_research.data.ticks import download_ticks, minute_summaries, normalize_quotes, sign_trades
 
-from .fake_alpaca import FakeAlpaca, raw_ticks
+from ..fakes.fake_alpaca import FakeAlpaca, raw_ticks
 
 DAY = "2026-10-27"
 LATER = pd.Timestamp("2026-10-28T12:00Z")

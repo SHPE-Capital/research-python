@@ -20,7 +20,7 @@ little less predictive but honest beats one that leaks.
 - [AGENTS.md](../../AGENTS.md)
 - [docs/contracts.md](../../docs/contracts.md): `ts` vs. `ts_available`, bar columns
 - `src/shpe_research/features/base.py`: `compute_features`, `assert_no_lookahead`
-- `src/shpe_research/features/returns.py`: the reference implementation
+- `src/shpe_research/features/returns/past_return.py`: the reference implementation
 - The stub you are implementing; its `TODO(<ID>)` docstring is the spec
 - `tests/todo/test_features_todo.py`
 - [docs/design/pipeline.md](../../docs/design/pipeline.md) for transforms and context symbols

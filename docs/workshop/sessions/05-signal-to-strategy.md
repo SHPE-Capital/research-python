@@ -6,7 +6,7 @@
 | Duration | 90 min |
 | Prerequisites | Session 4 |
 | Data | Fixture; the snapshot for the R1 demonstration |
-| Code used | `labels/exit_policy.py` (L2, absorbed by T1), `features/opening_range.py` (F4), `studies/r1-orb-selectors/` |
+| Code used | `labels/exit_policy.py` (L2, absorbed by T1), `features/session/opening_range.py` (F4), `studies/momentum/r1-orb-selectors/` |
 | Ends with a PR for | T1 (exit simulator), one of T2–T6, or an S-task for your team (SM1, SR1, SS3, …) |
 
 ## Why this session
@@ -108,7 +108,7 @@ in depth. [Example 9](../examples/09-trade-management.md) is the full session.
    The difference is costs, fill timing and the barriers.
 
 4. **R1 as the worked example.** Open
-   [studies/r1-orb-selectors/README.md](../../../studies/r1-orb-selectors/README.md).
+   [studies/momentum/r1-orb-selectors/README.md](../../../studies/momentum/r1-orb-selectors/README.md).
    R1 keeps one ORB entry rule (first completed bar after the opening range
    that closes above its high, through 11:00) and compares four selectors:
    A takes every trade, B is a rule (relative volume ≥ 1.2 and SPY above its

@@ -45,12 +45,12 @@ What the platform already provides that P8 will use:
 
 ### Research
 
-[studies/r1-orb-selectors/README.md](../../studies/r1-orb-selectors/README.md)
+[studies/momentum/r1-orb-selectors/README.md](../../studies/momentum/r1-orb-selectors/README.md)
 defines the working ORB:
 
 | Element | R1 definition |
 |---|---|
-| Opening range | Regular bars 09:30–09:44 New York time (`range_minutes = 15`); H = max high, L = min low. Known at `ts_available` 09:45 (`features/opening_range.py`) |
+| Opening range | Regular bars 09:30–09:44 New York time (`range_minutes = 15`); H = max high, L = min low. Known at `ts_available` 09:45 (`features/session/opening_range.py`) |
 | Entry | First completed post-range bar with close > H, through 11:00. Long only |
 | Fill | Next bar's open plus half spread and slippage (`labels/exit_policy.py` defaults: 1.0 and 2.0 bps) |
 | Stop | Range midpoint (H + L) / 2 |
@@ -489,7 +489,7 @@ should not build its own copies while waiting.
   of Portfolio Management*.
 - Sweeney, J. (1997). *Maximum Adverse Excursion: Analyzing Price Fluctuations
   for Trading Management*. Wiley.
-- Internal: [studies/r1-orb-selectors/README.md](../../studies/r1-orb-selectors/README.md),
+- Internal: [studies/momentum/r1-orb-selectors/README.md](../../studies/momentum/r1-orb-selectors/README.md),
   [design/trade-layer.md](../design/trade-layer.md),
   [design/platform-parity.md](../design/platform-parity.md),
   trading-platform `docs/architecture/backtest-execution.md`.

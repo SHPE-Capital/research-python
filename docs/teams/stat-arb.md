@@ -31,7 +31,7 @@ work is mostly **calibration and pair selection**, not building from scratch.
 
 | Area | Team owns | Shared with others |
 |---|---|---|
-| Library code | `src/shpe_research/strategies/statarb/` (SS1–SS4), `features/cross_asset.py` pair features (F7, with the F8 owner) | `trade/`, `analysis/`, `deploy/` (T1–T8): reviewed by a member of another team |
+| Library code | `src/shpe_research/strategies/statarb/` (SS1–SS4), `features/cross_asset/pair_spread.py` pair features (F7, with the F8 owner) | `trade/`, `analysis/`, `deploy/` (T1–T8): reviewed by a member of another team |
 | Studies | `studies/stat-arb/` (RS1–RS9; R3 moves here as `studies/stat-arb/r3-pairs-clustering/`) | `studies/shared/` (R5 TCA) |
 | Platform | Spec and review for P9 (pairs config additions) | P1, P2, P6 |
 | Workshop | Example 7, with segments in 6, 8 and 9 | |
@@ -79,7 +79,7 @@ parity requirement for SS4.
 1. **Decision clock.** One observation per minute, only when both legs printed
    a completed bar for the same minute, priced at each leg's **close**.
 2. **Spread in raw price space.** `spread = price_leg1 − β × price_leg2`, not
-   in log prices. The F7 spec in `features/cross_asset.py` says log prices;
+   in log prices. The F7 spec in `features/cross_asset/pair_spread.py` says log prices;
    this mismatch has to be resolved (see §12 and §8).
 3. **The z-score includes the current observation.** The spread is pushed into
    the window *before* the mean and std are computed, so the current point

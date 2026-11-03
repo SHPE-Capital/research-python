@@ -23,7 +23,7 @@ the same reasons. Testing only within clusters means fewer tests, fewer false
 discoveries and pairs that have an economic reason to stay together.
 
 This example is the workshop version of study R3, question Q1
-([studies/r3-pairs-clustering/README.md](../../../studies/r3-pairs-clustering/README.md)):
+([studies/stat-arb/r3-pairs-clustering/README.md](../../../studies/stat-arb/r3-pairs-clustering/README.md)):
 *does clustering on residual returns, with cointegration tested only inside
 clusters, beat all-pairs testing on out-of-sample survival?*
 
@@ -306,5 +306,5 @@ Full solutions live on the `workshop-solutions` branch under `workshop/07_unsupe
 
 - Gatev, E., Goetzmann, W. & Rouwenhorst, K. G. (2006). Pairs trading: performance of a relative-value arbitrage rule. *Review of Financial Studies*.
 - Avellaneda, M. & Lee, J.-H. (2010). Statistical arbitrage in the US equities market. *Quantitative Finance*.
-- [studies/r3-pairs-clustering/README.md](../../../studies/r3-pairs-clustering/README.md)
+- [studies/stat-arb/r3-pairs-clustering/README.md](../../../studies/stat-arb/r3-pairs-clustering/README.md)
 - [design/platform-parity.md](../../design/platform-parity.md): how a pair list becomes a platform config.

@@ -134,7 +134,7 @@ purging and an embargo (V1, session 4).
 
 ## Connection to team strategies
 
-R1 (ORB selectors, `studies/r1-orb-selectors/`) compares four selectors
+R1 (ORB selectors, `studies/momentum/r1-orb-selectors/`) compares four selectors
 with the same model contract: A (all), B (rule), C (random forest), D (MLP).
 Every team study uses `shpe run` configs this way. See
 [research-protocol.md](../../research/research-protocol.md).

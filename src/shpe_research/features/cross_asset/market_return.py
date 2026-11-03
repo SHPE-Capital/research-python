@@ -48,21 +48,3 @@ class MarketReturn(Feature):
 
     def compute(self, bars: pd.DataFrame) -> pd.Series:
         raise NotImplementedError("TODO(F8): needs the context-symbol extension to compute_features")
-
-
-class PairSpreadZScore(Feature):
-    feature_type = "pair_spread_z"
-    requires = ("close", "ts_available")
-    context_symbols: tuple[str, ...]
-
-    def __init__(self, other: str, lookback_sessions: int = 20):
-        self.other = other
-        self.lookback_sessions = int(lookback_sessions)
-        self.context_symbols = (other,)
-
-    @property
-    def name(self) -> str:
-        return f"pair_z_{self.other.lower()}_{self.lookback_sessions}d"
-
-    def compute(self, bars: pd.DataFrame) -> pd.Series:
-        raise NotImplementedError("TODO(F7): needs the context-symbol extension to compute_features")

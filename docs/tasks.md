@@ -30,7 +30,7 @@ start with `tests/`, `configs/`, `workshop/` or another top-level folder.
 | ID | Task | Files | Status |
 |---|---|---|---|
 | C0 | Contracts v0, repo skeleton, fixture data, hello model end to end | `contracts/`, `data/fixtures.py`, `experiments/runner.py` | Done |
-| Migration PR | Move files to the target tree (Wave 0, before C1a); no behaviour change | see [handoff/README.md](handoff/README.md#wave-0-the-migration-pr) | Open |
+| Migration PR | Move files to the target tree (Wave 0, before C1a); no behaviour change | see [handoff/README.md](handoff/README.md#wave-0-the-migration-pr) | Done |
 
 ## Data
 

@@ -23,7 +23,7 @@ This is how ML is often added to an existing discretionary or rule-based
 strategy in practice: the rule carries the economic idea, the model learns
 when the idea works, and the comparison is always against the rule alone and
 against a simple hand-made filter. The study R1
-([studies/r1-orb-selectors/README.md](../../../studies/r1-orb-selectors/README.md))
+([studies/momentum/r1-orb-selectors/README.md](../../../studies/momentum/r1-orb-selectors/README.md))
 is this example at full size.
 
 ## Learning objectives
@@ -52,7 +52,7 @@ is this example at full size.
 | Side | Long |
 | Entry | Open of the next bar, plus half spread and slippage |
 
-`features/opening_range.py` (F4) computes `H`, `L`, range width and breakout
+`features/session/opening_range.py` (F4) computes `H`, `L`, range width and breakout
 distance. Its worked example: `H = 100`, `L = 98`, close 100.10 gives a
 breakout distance of `(100.10 − 100) / 100 = 0.001`.
 
@@ -312,7 +312,7 @@ stops, targets, holding period and sizing. See also
   Wiley. Ch. 3 (triple-barrier labels and meta-labeling), ch. 10 (bet sizing).
 - Kelly, J. L. (1956). "A New Interpretation of Information Rate." *Bell
   System Technical Journal*.
-- Repo: [studies/r1-orb-selectors/README.md](../../../studies/r1-orb-selectors/README.md),
+- Repo: [studies/momentum/r1-orb-selectors/README.md](../../../studies/momentum/r1-orb-selectors/README.md),
   [teams/momentum.md](../../teams/momentum.md),
   [session 5](../sessions/05-signal-to-strategy.md),
   [research/trade-management.md](../../research/trade-management.md).

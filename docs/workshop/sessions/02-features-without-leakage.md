@@ -6,7 +6,7 @@
 | Duration | 75 min |
 | Prerequisites | Session 1 |
 | Data | Fixture |
-| Code used | `features/base.py`, `features/returns.py`, the F1–F5 stubs |
+| Code used | `features/base.py`, `features/returns/past_return.py`, the F1–F5 stubs |
 | Ends with a PR for | One of F1 (relative volume), F2 (VWAP distance), F3 (realized volatility), F4 (opening range), F5 (regime set) |
 
 ## Why this session
@@ -87,7 +87,7 @@ What it cannot catch:
 
 ## Walkthrough
 
-1. **Read `PastReturn`** in `features/returns.py`. It uses `merge_asof`
+1. **Read `PastReturn`** in `features/returns/past_return.py`. It uses `merge_asof`
    within the session, so the 30-minute return at 09:35 is NaN.
 
 2. **Run the check on it:**
@@ -95,7 +95,7 @@ What it cannot catch:
    ```python
    from shpe_research.data.fixtures import synthetic_bars
    from shpe_research.features.base import assert_no_lookahead
-   from shpe_research.features.returns import PastReturn
+   from shpe_research.features.returns.past_return import PastReturn
    one = synthetic_bars(symbols=("AAA",), end="2026-03-31")
    assert_no_lookahead(PastReturn(5), one)   # passes silently
    ```
@@ -128,7 +128,7 @@ What it cannot catch:
 | Core | Explain, for each row of the look-ahead table, why the prefix check fails | Each operation's value at row i depends on rows after i |
 | Stretch | Write a feature that passes `assert_no_lookahead` but leaks anyway, then write a unit test that catches it | E.g. a "previous close" that is really today's close when bars are missing; test with a hand-built frame |
 | Stretch | Show that `assert_no_lookahead` with a single cutoff can miss a leak that a different cutoff catches | Run `DayZScore` with a cutoff exactly at a session boundary (passes: every day in the prefix is complete) and one mid-session (fails) |
-| Challenge | Implement F4 (opening range) to its spec in `features/opening_range.py`, including the worked example (H=100, L=98, close 100.10 → breakout distance 0.001) | The range is known at 09:45; earlier rows are NaN |
+| Challenge | Implement F4 (opening range) to its spec in `features/session/opening_range.py`, including the worked example (H=100, L=98, close 100.10 → breakout distance 0.001) | The range is known at 09:45; earlier rows are NaN |
 
 ## Discussion
 

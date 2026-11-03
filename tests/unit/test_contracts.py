@@ -21,7 +21,7 @@ from shpe_research.contracts.model import Model, load_model, register_model
 from shpe_research.contracts.ticks import validate_quotes, validate_trades
 from shpe_research.features.base import Feature, assert_no_lookahead
 
-from .conftest import make_bars
+from ..conftest import make_bars
 
 # ---------------------------------------------------------------- bars
 

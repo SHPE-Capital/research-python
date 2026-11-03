@@ -8,7 +8,8 @@ from shpe_research.features.base import (
     compute_features,
     register_feature,
 )
-from shpe_research.features.returns import MinuteOfSession, PastReturn
+from shpe_research.features.returns.past_return import PastReturn
+from shpe_research.features.session.minute_of_session import MinuteOfSession
 
 __all__ = [
     "FEATURE_REGISTRY",

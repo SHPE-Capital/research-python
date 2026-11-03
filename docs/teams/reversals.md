@@ -562,7 +562,7 @@ costs", plus the evidence. That prevents a loss.
 - Bailey, D. and López de Prado, M. (2014). The deflated Sharpe ratio.
   *Journal of Portfolio Management*. Used by E2.
 
-Internal: [studies/r2-reversal-metalabel/README.md](../../studies/r2-reversal-metalabel/README.md),
-[studies/r4-microstructure-ofi/README.md](../../studies/r4-microstructure-ofi/README.md),
+Internal: [studies/reversals/r2-reversal-metalabel/README.md](../../studies/reversals/r2-reversal-metalabel/README.md),
+[studies/reversals/r4-microstructure-ofi/README.md](../../studies/reversals/r4-microstructure-ofi/README.md),
 [contracts.md](../contracts.md), [tasks.md](../tasks.md),
 [platform-tasks.md](../platform-tasks.md).

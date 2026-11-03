@@ -24,7 +24,7 @@ from shpe_research.contracts.model import Model, build_model
 from shpe_research.evaluation.report import decile_table, evaluate, write_report
 from shpe_research.experiments.sources import load_bars
 from shpe_research.features.base import build_feature, compute_features
-from shpe_research.features.returns import minutes_since_open
+from shpe_research.features.session.minute_of_session import minutes_since_open
 from shpe_research.labels.forward_return import ForwardReturn, compute_labels
 from shpe_research.validation.splits import split_by_day
 
