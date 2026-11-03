@@ -3,6 +3,9 @@
 Settings come from environment variables, optionally loaded from a git-ignored
 `.env` at the repo root (see `.env.example`). Nothing here holds secrets in
 code; keys are read only when a download actually needs them.
+
+The typed experiment, strategy and sweep schemas (C1h) live in the submodules
+and are re-exported at the bottom; `load_config(path)` picks one by `kind`.
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 load_dotenv(REPO_ROOT / ".env", override=False)
 
@@ -50,3 +53,13 @@ def git_commit() -> str | None:
     except (OSError, subprocess.CalledProcessError):
         return None
     return out.stdout.strip() or None
+
+
+from shpe_research.config.experiment import ExperimentConfig  # noqa: E402
+from shpe_research.config.strategy import StrategySpec  # noqa: E402
+from shpe_research.config.sweep import SweepConfig, load_config  # noqa: E402
+
+__all__ = [
+    "REPO_ROOT", "ExperimentConfig", "StrategySpec", "SweepConfig", "data_dir", "git_commit", "load_config",
+    "requests_per_minute", "runs_dir", "snapshots_dir",
+]  # fmt: skip
