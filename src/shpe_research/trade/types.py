@@ -7,6 +7,7 @@ half-spread, 5 bps slippage, $0.005 per share.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 import pandas as pd
@@ -53,12 +54,42 @@ class ExitPolicy:
     entry_order: Literal["market", "stop"] = "market"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class SizingRule:
-    """Quantity rule (T2): fixed_qty, fixed_notional, risk_per_trade, inverse_vol, prob_to_size, kelly_fractional."""
+    """Quantity rule (T2): ``SizingRule(rule, **params)``.
 
-    rule: str = "native"
-    params: dict[str, Any] | None = None
+    Rules: native, fixed_qty, fixed_notional, risk_per_trade, inverse_vol, prob_to_size,
+    kelly_fractional (params per rule in ``trade/sizing.py``). Validated at construction.
+    ``size(candidates, bars, equity)`` returns whole-share quantities (see ``trade.sizing``).
+    A ``params={...}`` dict keyword is also accepted and merged with the keyword params.
+    """
+
+    rule: str
+    params: dict[str, Any]
+
+    def __init__(self, rule: str = "native", params: dict[str, Any] | None = None, **kwargs: Any) -> None:
+        from shpe_research.trade.sizing import validate_rule
+
+        merged = {**(params or {}), **kwargs}
+        validate_rule(rule, merged)
+        object.__setattr__(self, "rule", rule)
+        object.__setattr__(self, "params", merged)
+
+    def __hash__(self) -> int:
+        return hash((self.rule, tuple(sorted((k, str(v)) for k, v in self.params.items()))))
+
+    @property
+    def exportable(self) -> bool:
+        """True if the platform can run this rule today (fixed_qty, fixed_notional, native)."""
+        from shpe_research.trade.sizing import EXPORTABLE_RULES
+
+        return self.rule in EXPORTABLE_RULES
+
+    def size(self, candidates: pd.DataFrame, bars: pd.DataFrame, equity: float) -> pd.Series:
+        """Whole-share quantity per candidate row (int64, index of `candidates`); 0 means no trade."""
+        from shpe_research.trade.sizing import size_candidates
+
+        return size_candidates(self, candidates, bars, equity)
 
 
 @dataclass(frozen=True)
@@ -84,7 +115,7 @@ class RiskLimits:
 
 @dataclass(frozen=True)
 class CostModel:
-    """Transaction costs (T5)."""
+    """Transaction costs (T5). Spread and slippage are inside the fill price; see `trade/costs.py`."""
 
     half_spread_bps: float = 2.0
     slippage_bps: float = 5.0
@@ -92,3 +123,23 @@ class CostModel:
     impact_coef: float = 0.0
     impact_exponent: float = 0.5
     source: str = "platform_default"
+
+    @classmethod
+    def from_fill(cls, fill: FillModel) -> CostModel:
+        """Model with the fill model's spread, slippage and commission."""
+        from shpe_research.trade import costs
+
+        return costs.from_fill(fill)
+
+    @classmethod
+    def from_tca(cls, path: str | Path) -> CostModel:
+        """Calibrated model from a one-row R5 result table (csv or parquet)."""
+        from shpe_research.trade import costs
+
+        return costs.from_tca(path)
+
+    def cost(self, side: str, price: float, qty: float, adv: float | None = None) -> tuple[float, float]:
+        """`(cost_usd, cost_bps)` of one fill at reference `price`; impact applies when `adv` is given."""
+        from shpe_research.trade import costs
+
+        return costs.cost(self, side, price, qty, adv)
