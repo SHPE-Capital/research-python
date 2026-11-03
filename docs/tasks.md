@@ -136,7 +136,7 @@ study uses which task.
 | [SR2](handoff/tasks/SR2.md) | Stretch fade | Int–Adv | T1, F2, F3 | `strategies/reversal/stretch.py`, `configs/strategies/reversal/stretch_fade.yaml` | Config runs end to end | Open |
 | [SR3](handoff/tasks/SR3.md) | Residual fade | Adv | F7/F8, T1 | `strategies/reversal/residual.py`, `configs/strategies/reversal/residual_fade.yaml` | SR1–SR3 comparable on one fixture | Open |
 | [SS1](handoff/tasks/SS1.md) | Pair selection | Adv | SS2, SS3 | `strategies/statarb/selection.py` | W7 can call each method | Open |
-| [SS2](handoff/tasks/SS2.md) | Hedge ratios | Int | C1a | `features/cross_asset/pair_math.py` (hedge section), `strategies/statarb/hedge.py` | Hedge tests pass; no copied estimators | Open |
+| [SS2](handoff/tasks/SS2.md) | Hedge ratios | Int | C1a | `features/cross_asset/pair_math.py` (hedge section), `strategies/statarb/hedge.py` | Hedge tests pass; no copied estimators | Done |
 | [SS3](handoff/tasks/SS3.md) | Ornstein-Uhlenbeck fit and half-life | Int | C1a | `features/cross_asset/pair_math.py` (OU section), `strategies/statarb/ou.py` | OU tests pass; T6 delegates to `fit_ou` | Open |
 | [SS4](handoff/tasks/SS4.md) | Pairs candidate generator (platform parity) | Adv | SS2, SS3, T1 | `strategies/statarb/pairs.py`, `configs/strategies/statarb/pairs.yaml` | All `pairs_trading` goldens pass | Open |
 
