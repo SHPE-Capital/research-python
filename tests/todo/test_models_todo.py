@@ -25,8 +25,7 @@ def dataset():
                      id="random_forest"),
         pytest.param("gradient_boosting", "LightGBMModel", {"n_estimators": 50},
                      marks=pytest.mark.skip(reason="TODO(M1b)"), id="lightgbm"),
-        pytest.param("mlp", "MLPModel", {"hidden": [16, 8]},
-                     marks=pytest.mark.skip(reason="TODO(M1c)"), id="mlp"),
+        pytest.param("mlp", "MLPModel", {"hidden": [16, 8]}, id="mlp"),
     ],
 )
 def test_m1_models(dataset, tmp_path, module, cls, params):
