@@ -86,9 +86,8 @@ def test_regime_features():
         assert_no_lookahead(RegimeFeature(measure, 60), reverting)
 
 
-@pytest.mark.skip(reason="TODO(F6): needs D3 minute summaries joined onto bars")
 def test_order_flow():
-    from shpe_research.features.order_flow import SignedVolumeRatio
+    from shpe_research.features.microstructure.order_flow import SignedVolumeRatio
 
     bars = pd.DataFrame(
         {
