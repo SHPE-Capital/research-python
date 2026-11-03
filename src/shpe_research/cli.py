@@ -309,6 +309,9 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_run(sub)
     _add_fixtures(sub)
     _add_data(sub)
+    from shpe_research.scaffold.new import _add_new
+
+    _add_new(sub)
     from shpe_research.models.export_onnx import _add_export
 
     _add_export(sub, _export)
