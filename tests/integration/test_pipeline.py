@@ -112,3 +112,27 @@ def test_cli_run_and_fixtures(tmp_path: Path, capsys):
     argv = ["fixtures", "--out", str(out), "--symbols", "AAA", "--start", "2026-05-01", "--end", "2026-05-05"]
     assert main(argv) == 0
     assert out.exists()
+
+
+def _numbers_close(a, b, path=""):
+    if isinstance(a, dict):
+        assert a.keys() == b.keys(), path
+        for k in a:
+            _numbers_close(a[k], b[k], f"{path}/{k}")
+    elif isinstance(a, list):
+        assert len(a) == len(b), path
+        for i, (x, y) in enumerate(zip(a, b, strict=True)):
+            _numbers_close(x, y, f"{path}[{i}]")
+    elif isinstance(a, float) or isinstance(b, float):
+        assert a == pytest.approx(b, abs=1e-9, rel=0), path
+    else:
+        assert a == b, path
+
+
+def test_hello_model_golden(tmp_path: Path):
+    """The refactored pipeline reproduces the C0 report (captured on main before C1a)."""
+    import json
+
+    golden = json.loads((Path(__file__).parent / "golden" / "report_hello_model.json").read_text())
+    result = run_experiment(_small_config(signal_strength=0.5), out_root=tmp_path)
+    _numbers_close(json.loads((result.run_dir / "report.json").read_text()), golden)

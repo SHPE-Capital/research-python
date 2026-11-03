@@ -100,6 +100,7 @@ def _dataset(n: int = 10, **overrides) -> Dataset:
                 "label_end_ts": decision + pd.Timedelta(minutes=30),
                 "weight": 1.0,
                 "split": ["train"] * (n // 2) + ["validation"] * (n - n // 2),
+                "era": "2026-10-01",
             }
         ),
         "label_name": "fwd_sign_30m",
@@ -190,3 +191,25 @@ def test_assert_no_lookahead_accepts_causal_and_rejects_future_use():
     assert_no_lookahead(_TrailingMean(), bars)
     with pytest.raises(AssertionError, match="uses future data"):
         assert_no_lookahead(_CenteredMean(), bars)
+
+
+def test_era_column():
+    from shpe_research.contracts.dataset import META_COLUMNS
+    from shpe_research.contracts.version import CONTRACT_VERSION
+
+    assert "era" in META_COLUMNS
+    assert CONTRACT_VERSION == "0.2.0"
+    with pytest.raises(ContractError, match="era"):
+        _dataset(meta=_dataset().meta.drop(columns="era"))
+
+
+def test_era_is_the_new_york_date_for_minute_rows():
+    from shpe_research.data.fixtures import synthetic_bars
+    from shpe_research.experiments.runner import ExperimentConfig, build_dataset
+
+    cfg = ExperimentConfig.from_yaml(Path(__file__).parents[2] / "configs/experiments/hello_model.yaml")
+    cfg.data = {"source": "fixture", "symbols": ["AAA"], "start": "2026-05-01", "end": "2026-05-12"}
+    bars = synthetic_bars(symbols=["AAA"], start="2026-05-01", end="2026-05-12")
+    meta = build_dataset(cfg, bars).meta
+    expected = meta["decision_ts"].dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d")
+    assert (meta["era"] == expected).all()

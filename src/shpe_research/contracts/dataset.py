@@ -6,7 +6,8 @@ A Dataset is three aligned parts sharing one index:
     y     the label
     meta  at least: symbol, decision_ts (when the prediction is made),
           label_end_ts (when the label's outcome is fully known), weight,
-          split ("train" | "validation" | "test" | "unassigned").
+          split ("train" | "validation" | "test" | "unassigned"), era (the New York
+          session date YYYY-MM-DD for intraday rows, the ISO week YYYY-Www for daily rows).
           Extra columns (e.g. the raw forward return behind a sign label)
           are allowed and travel with the rows.
 
@@ -31,6 +32,7 @@ META_COLUMNS: dict[str, str] = {
     "label_end_ts": "utc",
     "weight": "float",
     "split": "str",
+    "era": "str",
 }
 
 

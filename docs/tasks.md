@@ -91,7 +91,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
-| [C1a](handoff/tasks/C1a.md) | Pipeline stages, registries and package skeleton | Adv | ADRs 0002–0005, migration PR | `pipeline/`, `experiments/runner.py`, `contracts/candidates.py`, `events/types.py`, `trade/types.py`, empty package skeletons | Registry tests pass; hello golden unchanged | Open |
+| [C1a](handoff/tasks/C1a.md) | Pipeline stages, registries and package skeleton | Adv | ADRs 0002–0005, migration PR | `pipeline/`, `experiments/runner.py`, `contracts/candidates.py`, `events/types.py`, `trade/types.py`, empty package skeletons | Registry tests pass; hello golden unchanged | Done |
 | [C1b](handoff/tasks/C1b.md) | Events and candidates layer | Int–Adv | C1a, C1o | `contracts/candidates.py`, `events/samplers.py`, `events/thresholds.py`, `events/breakouts.py` | `decisions: {type: session_close}` runs end to end | Open |
 | [C1c](handoff/tasks/C1c.md) | Label registry | Int | C1a; T1 for `triple_barrier` | `labels/base.py`, `labels/realized_var.py`, `labels/triple_barrier.py` | Label tests pass; hello golden unchanged | Open |
 | [C1d](handoff/tasks/C1d.md) | Context symbols and cross-sectional transforms | Int–Adv | C1a, C1o | `features/base.py` (`context`), `transforms/` | `context_symbols: [SPY]` config runs; contract bump reviewed | Open |
