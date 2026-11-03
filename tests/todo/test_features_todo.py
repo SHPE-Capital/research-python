@@ -16,9 +16,8 @@ def month():
     return synthetic_bars(symbols=["AAA"], start="2026-04-01", end="2026-05-15")
 
 
-@pytest.mark.skip(reason="TODO(F1)")
 def test_relative_volume(month):
-    from shpe_research.features.relative_volume import RelativeVolume
+    from shpe_research.features.volume.relative_volume import RelativeVolume
 
     feature = RelativeVolume(lookback_sessions=20)
     values = feature.compute(month)
