@@ -1,0 +1,12 @@
+# W1 baseline: the hello model on fixture seed 7. Validation AUC is slightly above 0.5 (the planted reversion).
+name: leak_clean
+seed: 7
+data: {source: fixture, symbols: [AAA, BBB, CCC, DDD, EEE, FFF], start: "2026-03-02", end: "2026-08-28", seed: 7}
+session: regular
+features:
+  - {type: past_return, window: 5}
+  - {type: past_return, window: 30}
+  - {type: minute_of_day}
+label: {type: forward_return, horizon_minutes: 30, target: sign, sample_every_minutes: 15}
+split: {train: 0.6, validation: 0.2, test: 0.2, gap_days: 0}
+model: {type: logistic, params: {C: 1.0}}
