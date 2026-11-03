@@ -56,7 +56,7 @@ changes; the spec stays in the stub docstring.
 | [F3](handoff/tasks/F3.md) | Realized volatility | Beg | | `features/volatility/realized_vol.py` | `test_realized_vol` | Done |
 | [F4](handoff/tasks/F4.md) | Opening-range width and breakout distance | Beg–Int | | `features/session/opening_range.py` | `test_opening_range`, for `range_minutes` 5, 15 and 30 | Done |
 | [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Done |
-| [F6](handoff/tasks/F6.md) | Order-flow features from tick minute summaries | Int | D3 | `features/microstructure/order_flow.py` | `test_order_flow` | Open |
+| [F6](handoff/tasks/F6.md) | Order-flow features from tick minute summaries | Int | D3 | `features/microstructure/order_flow.py` | `test_order_flow` | Done |
 | [F7](handoff/tasks/F7-F8.md) | Pair spread z-score, hedge ratio and half-life | Int | C1d, SS2, SS3 | `features/cross_asset/pair_spread.py` | `test_pair_spread` | Open |
 | [F8](handoff/tasks/F7-F8.md) | Market (SPY) return and β at decision time | Int | C1d | `features/cross_asset/market_return.py` | `test_market_return` | Open |
 
@@ -130,7 +130,7 @@ study uses which task.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [SM1](handoff/tasks/SM1.md) | Opening-range breakout candidate generator | Int | C1b, T1 | `strategies/momentum/orb.py`, `configs/strategies/momentum/orb.yaml` | Config runs end to end on the fixture | Open |
-| [SM2](handoff/tasks/SM2.md) | EMA crossover baseline | Beg | C1a | `strategies/momentum/ema_cross.py`, `configs/strategies/momentum/ema_cross.yaml` | Config runs on the fixture | Open |
+| [SM2](handoff/tasks/SM2.md) | EMA crossover baseline | Beg | C1a | `strategies/momentum/ema_cross.py`, `configs/strategies/momentum/ema_cross.yaml` | Config runs on the fixture | Done |
 | [SM3](handoff/tasks/SM3.md) | Cross-sectional 12-1 momentum | Int | C1d, C1e | `strategies/momentum/xs_momentum.py`, `configs/strategies/momentum/xs_momentum.yaml` | Config runs on the daily fixture | Open |
 | [SR1](handoff/tasks/SR1.md) | Bar-fade baseline (platform parity) | Int | C1a, T1 | `strategies/reversal/bar_fade.py`, `configs/strategies/reversal/bar_fade.yaml` | All `minute_reversal` goldens pass | Open |
 | [SR2](handoff/tasks/SR2.md) | Stretch fade | Int–Adv | T1, F2, F3 | `strategies/reversal/stretch.py`, `configs/strategies/reversal/stretch_fade.yaml` | Config runs end to end | Open |
