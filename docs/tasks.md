@@ -52,7 +52,7 @@ changes; the spec stays in the stub docstring.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [F1](handoff/tasks/F1.md) | Relative volume and the intraday volume curve | Beg–Int | | `features/volume/relative_volume.py` | `test_relative_volume` | Open |
-| [F2](handoff/tasks/F2.md) | Distance from session VWAP | Beg | | `features/volume/vwap_distance.py` | `test_vwap_distance` | Open |
+| [F2](handoff/tasks/F2.md) | Distance from session VWAP | Beg | | `features/volume/vwap_distance.py` | `test_vwap_distance` | Done |
 | [F3](handoff/tasks/F3.md) | Realized volatility | Beg | | `features/volatility/realized_vol.py` | `test_realized_vol` | Open |
 | [F4](handoff/tasks/F4.md) | Opening-range width and breakout distance | Beg–Int | | `features/session/opening_range.py` | `test_opening_range`, for `range_minutes` 5, 15 and 30 | Done |
 | [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Open |
@@ -81,7 +81,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
-| M1a | Random forest | Beg | | `models/random_forest.py` | `test_m1_models[random_forest]` | Open |
+| M1a | Random forest | Beg | | `models/random_forest.py` | `test_m1_models[random_forest]` | Done |
 | M1b | LightGBM | Beg–Int | | `models/gradient_boosting.py` | `test_m1_models[lightgbm]` | Open |
 | M1c | Small neural network (chronological early stopping) | Int | | `models/mlp.py` | `test_m1_models[mlp]` | Open |
 | M2 | Config sweeps, seed ensembles, MLflow registry | Int | | `experiments/sweep.py` | `test_sweep`; every run visible in MLflow | Open |
@@ -115,7 +115,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Done (simulate_trades wiring waits on T1) |
 | [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Open |
 | [T4](handoff/tasks/T4.md) | Risk limits | Int | C1a | `trade/risk.py` | `simulate_trades(..., risk=...)` rejects with reasons | Open |
-| [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Open |
+| [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Done (calibration pending R5) |
 | [T6](handoff/tasks/T6.md) | Trade analysis: holding, excursions, surfaces | Int–Adv | T1, E1 | `analysis/` | Team guides' holding and stop steps run on fixtures | Open |
 | [T7](handoff/tasks/T7.md) | Platform config export and parity check | Adv | C1h, T1, T2, T4, T5 | `deploy/platform_config.py`, `deploy/parity.py`, `tests/integration/golden/` | SR1 and SS4 pass their goldens; commission finding recorded | Open |
 | [T8](handoff/tasks/T8.md) | Strategy spec card and strategy template | Beg–Int | C1h, C1j, T7 | `scaffold/templates/strategy/`, `strategies/card.py` | SR1 has a rendered card | Open |
@@ -136,7 +136,7 @@ study uses which task.
 | [SR2](handoff/tasks/SR2.md) | Stretch fade | Int–Adv | T1, F2, F3 | `strategies/reversal/stretch.py`, `configs/strategies/reversal/stretch_fade.yaml` | Config runs end to end | Open |
 | [SR3](handoff/tasks/SR3.md) | Residual fade | Adv | F7/F8, T1 | `strategies/reversal/residual.py`, `configs/strategies/reversal/residual_fade.yaml` | SR1–SR3 comparable on one fixture | Open |
 | [SS1](handoff/tasks/SS1.md) | Pair selection | Adv | SS2, SS3 | `strategies/statarb/selection.py` | W7 can call each method | Open |
-| [SS2](handoff/tasks/SS2.md) | Hedge ratios | Int | C1a | `features/cross_asset/pair_math.py` (hedge section), `strategies/statarb/hedge.py` | Hedge tests pass; no copied estimators | Open |
+| [SS2](handoff/tasks/SS2.md) | Hedge ratios | Int | C1a | `features/cross_asset/pair_math.py` (hedge section), `strategies/statarb/hedge.py` | Hedge tests pass; no copied estimators | Done |
 | [SS3](handoff/tasks/SS3.md) | Ornstein-Uhlenbeck fit and half-life | Int | C1a | `features/cross_asset/pair_math.py` (OU section), `strategies/statarb/ou.py` | OU tests pass; T6 delegates to `fit_ou` | Done |
 | [SS4](handoff/tasks/SS4.md) | Pairs candidate generator (platform parity) | Adv | SS2, SS3, T1 | `strategies/statarb/pairs.py`, `configs/strategies/statarb/pairs.yaml` | All `pairs_trading` goldens pass | Open |
 

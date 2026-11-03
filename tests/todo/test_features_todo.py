@@ -36,9 +36,8 @@ def test_relative_volume(month):
     assert_no_lookahead(feature, month)
 
 
-@pytest.mark.skip(reason="TODO(F2)")
 def test_vwap_distance(month):
-    from shpe_research.features.vwap_distance import VwapDistance
+    from shpe_research.features.volume.vwap_distance import VwapDistance
 
     values = VwapDistance().compute(month)
     days = session_date(month["ts"])
