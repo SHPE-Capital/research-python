@@ -21,7 +21,7 @@ from shpe_research.data.fixtures import synthetic_bars
 
 
 def _fixture(cfg: dict[str, Any]) -> pd.DataFrame:
-    params = {k: v for k, v in cfg.items() if k in ("symbols", "start", "end", "seed", "signal_strength")}
+    params = {k: v for k, v in cfg.items() if k not in ("source", "type")}
     return synthetic_bars(**params)
 
 
