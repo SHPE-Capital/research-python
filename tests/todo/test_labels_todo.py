@@ -11,7 +11,6 @@ from shpe_research.data.fixtures import synthetic_bars
 from shpe_research.labels.forward_return import ForwardReturn
 
 
-@pytest.mark.skip(reason="TODO(L1)")
 def test_multi_horizon():
     from shpe_research.labels.multi_horizon import forward_returns
 
@@ -22,6 +21,26 @@ def test_multi_horizon():
         np.testing.assert_allclose(out[f"fwd_return_{h}m"], single, equal_nan=True)
     costed = forward_returns(bars, horizons=(30,), cost_bps=10)
     np.testing.assert_allclose(costed["fwd_return_30m"], out["fwd_return_30m"] - 0.001, equal_nan=True)
+
+
+def test_multi_horizon_end_ts_and_vol_normalized():
+    from shpe_research.features.volatility.realized_vol import RealizedVol
+    from shpe_research.labels.multi_horizon import forward_returns
+
+    bars = synthetic_bars(symbols=["AAA", "BBB"], start="2026-10-01", end="2026-10-02")
+    raw = forward_returns(bars, horizons=(5, 30))
+    assert {"symbol", "decision_ts", "label_end_ts_5m", "label_end_ts_30m"} <= set(raw.columns)
+    assert (raw["label_end_ts_5m"] - raw["decision_ts"] == pd.Timedelta(minutes=5)).all()
+    assert raw.index.equals(bars.index)
+    norm = forward_returns(bars, horizons=(30,), vol_normalized=True)
+    sym = bars["symbol"] == "AAA"
+    vol = RealizedVol(15).compute(bars[sym].sort_values("ts"))
+    expected = raw.loc[sym, "fwd_return_30m"] / (vol * np.sqrt(30))
+    got = norm.loc[sym, "fwd_return_30m"]
+    ok = expected.notna() & np.isfinite(expected)
+    assert ok.any()
+    np.testing.assert_allclose(got[ok], expected[ok])
+    assert got[vol.isna()].isna().all()  # warm-up stays NaN, not zero
 
 
 def _bars(rows):
