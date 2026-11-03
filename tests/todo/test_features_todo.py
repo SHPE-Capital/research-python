@@ -103,11 +103,58 @@ def test_order_flow():
     assert values.iloc[3] == pytest.approx(5 / 15)
 
 
-@pytest.mark.skip(reason="TODO(F8): needs context symbols in compute_features")
+def _spy_frame(ts_available, opens, closes):
+    ts_available = pd.DatetimeIndex(ts_available)
+    return pd.DataFrame(
+        {
+            "symbol": "SPY",
+            "ts": ts_available - pd.Timedelta(minutes=1),
+            "ts_available": ts_available,
+            "open": opens,
+            "close": closes,
+        }
+    )
+
+
 def test_market_return():
-    raise NotImplementedError("Write with the F7 owner once the context-symbol extension is agreed")
+    from shpe_research.features.cross_asset.market_return import MarketReturn
+
+    avail = pd.date_range("2026-10-01T13:31Z", periods=3, freq="1min").astype("datetime64[ns, UTC]")
+    bars = pd.DataFrame(
+        {"symbol": "AAA", "ts": avail - pd.Timedelta(minutes=1), "ts_available": avail, "close": [10.0, 10.1, 10.2]}
+    )
+    spy = _spy_frame(avail, [400.0, 401.0, 402.0], [401.0, 402.0, 404.0])
+    values = MarketReturn().compute(bars, {"SPY": spy})
+    np.testing.assert_allclose(values.to_numpy(), [401 / 400 - 1, 402 / 400 - 1, 404 / 400 - 1], rtol=1e-12)
+    assert MarketReturn().name == "market_return_spy"
+
+    # A benchmark bar that becomes available 1 ns after the row's ts_available is not used.
+    late = spy.copy()
+    late.loc[2, "ts_available"] = avail[2] + pd.Timedelta(1, "ns")
+    late.loc[2, "close"] = 999.0
+    assert MarketReturn().compute(bars, {"SPY": late}).iloc[2] != pytest.approx(999 / 400 - 1)
+    head = MarketReturn().compute(bars.iloc[:2], {"SPY": late}).to_numpy()
+    np.testing.assert_allclose(head, values.to_numpy()[:2], rtol=1e-12)
 
 
-@pytest.mark.skip(reason="TODO(F7): needs context symbols in compute_features")
 def test_pair_spread():
-    raise NotImplementedError("Write with the F8 owner once the context-symbol extension is agreed")
+    from shpe_research.features.cross_asset.pair_spread import PairSpreadZScore
+
+    bars = synthetic_bars(
+        symbols=["AAA"],
+        start="2026-03-02",
+        end="2026-04-03",
+        cointegrated_pairs=[{"beta": 1.2, "half_life_bars": 60}],
+    )
+    spec = bars.attrs["planted"]["cointegrated_pairs"]["pairs"][0]
+    a, b = spec["symbols"]
+    leg_a = bars[bars["symbol"] == a].reset_index(drop=True)
+    leg_b = bars[bars["symbol"] == b].reset_index(drop=True)
+    # The fixture plants the spread in log prices, so the planted beta is read in log price space.
+    kw = {"other": b, "price_space": "log"}  # default lookback_sessions=20
+    beta = PairSpreadZScore(output="beta", **kw).compute(leg_a, {b: leg_b})
+    hl = PairSpreadZScore(output="hl", **kw).compute(leg_a, {b: leg_b})
+    assert abs(beta.iloc[-500:].mean() - spec["beta"]) < 0.05
+    assert abs(hl.iloc[-1] - spec["half_life_bars"]) <= 0.3 * spec["half_life_bars"]
+    z = PairSpreadZScore(**kw).compute(leg_a, {b: leg_b})
+    assert z.iloc[:3].isna().all() and z.iloc[-100:].notna().all()

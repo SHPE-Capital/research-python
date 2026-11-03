@@ -8,6 +8,8 @@ from shpe_research.features.base import (
     compute_features,
     register_feature,
 )
+from shpe_research.features.cross_asset.market_return import MarketBeta, MarketReturn
+from shpe_research.features.cross_asset.pair_spread import PairSpreadZScore
 from shpe_research.features.regime.regime import RegimeFeature
 from shpe_research.features.returns.past_return import PastReturn
 from shpe_research.features.session.minute_of_session import MinuteOfSession
@@ -19,9 +21,12 @@ from shpe_research.features.volume.vwap_distance import VwapDistance
 __all__ = [
     "FEATURE_REGISTRY",
     "Feature",
+    "MarketBeta",
+    "MarketReturn",
     "MinuteOfSession",
     "OpeningRangeBreakoutDistance",
     "OpeningRangeWidth",
+    "PairSpreadZScore",
     "PastReturn",
     "RelativeVolume",
     "RealizedVol",
