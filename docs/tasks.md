@@ -68,7 +68,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 |---|---|---|---|---|---|---|
 | L1 | Forward returns at several horizons, cost- and volatility-adjusted variants | Beg | | `labels/multi_horizon.py` | `test_multi_horizon` | Open |
 | [L2](handoff/tasks/L2.md) | Exit-policy (stop/target/time) labels using the platform's bar fill rules. Superseded in part by T1: L2 is now a thin wrapper over `trade/` | Int | T1, C1c | `labels/exit_policy.py` | Shim tests pass, plus reconciliation with the platform on 5 sessions | Open |
-| [V1](handoff/tasks/V1.md) | Purged walk-forward splitter with embargo | Int | | `validation/purged.py` | `test_purged_walk_forward` | Open |
+| [V1](handoff/tasks/V1.md) | Purged walk-forward splitter with embargo | Int | | `validation/purged.py` | `test_purged_walk_forward` | Done |
 
 ## Evaluation
 
@@ -92,7 +92,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [C1a](handoff/tasks/C1a.md) | Pipeline stages, registries and package skeleton | Adv | ADRs 0002–0005, migration PR | `pipeline/`, `experiments/runner.py`, `contracts/candidates.py`, `events/types.py`, `trade/types.py`, empty package skeletons | Registry tests pass; hello golden unchanged | Done |
-| [C1b](handoff/tasks/C1b.md) | Events and candidates layer | Int–Adv | C1a, C1o | `contracts/candidates.py`, `events/samplers.py`, `events/thresholds.py`, `events/breakouts.py` | `decisions: {type: session_close}` runs end to end | Open |
+| [C1b](handoff/tasks/C1b.md) | Events and candidates layer | Int–Adv | C1a, C1o | `contracts/candidates.py`, `events/samplers.py`, `events/thresholds.py`, `events/breakouts.py` | `decisions: {type: session_close}` runs end to end | Done |
 | [C1c](handoff/tasks/C1c.md) | Label registry | Int | C1a; T1 for `triple_barrier` | `labels/base.py`, `labels/realized_var.py`, `labels/triple_barrier.py` | Label tests pass; hello golden unchanged | Open |
 | [C1d](handoff/tasks/C1d.md) | Context symbols and cross-sectional transforms | Int–Adv | C1a, C1o | `features/base.py` (`context`), `transforms/` | `context_symbols: [SPY]` config runs; contract bump reviewed | Open |
 | [C1e](handoff/tasks/C1e.md) | Daily frequency alongside minute bars | Int | C1a, C1o | `data/resample.py`, `features/daily/` | Daily config runs with the hello model | Open |
@@ -112,7 +112,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [T1](handoff/tasks/T1.md) | Exit policies and trade simulator | Adv | C1a, C1o | `trade/types.py`, `trade/exits.py`, `trade/simulate.py` | Simulator and fill tests pass; hello golden unchanged | Open |
-| [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Open |
+| [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Done (simulate_trades wiring waits on T1) |
 | [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Open |
 | [T4](handoff/tasks/T4.md) | Risk limits | Int | C1a | `trade/risk.py` | `simulate_trades(..., risk=...)` rejects with reasons | Open |
 | [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Open |
@@ -136,7 +136,7 @@ study uses which task.
 | [SR2](handoff/tasks/SR2.md) | Stretch fade | Int–Adv | T1, F2, F3 | `strategies/reversal/stretch.py`, `configs/strategies/reversal/stretch_fade.yaml` | Config runs end to end | Open |
 | [SR3](handoff/tasks/SR3.md) | Residual fade | Adv | F7/F8, T1 | `strategies/reversal/residual.py`, `configs/strategies/reversal/residual_fade.yaml` | SR1–SR3 comparable on one fixture | Open |
 | [SS1](handoff/tasks/SS1.md) | Pair selection | Adv | SS2, SS3 | `strategies/statarb/selection.py` | W7 can call each method | Open |
-| [SS2](handoff/tasks/SS2.md) | Hedge ratios | Int | C1a | `features/cross_asset/pair_math.py` (hedge section), `strategies/statarb/hedge.py` | Hedge tests pass; no copied estimators | Open |
+| [SS2](handoff/tasks/SS2.md) | Hedge ratios | Int | C1a | `features/cross_asset/pair_math.py` (hedge section), `strategies/statarb/hedge.py` | Hedge tests pass; no copied estimators | Done |
 | [SS3](handoff/tasks/SS3.md) | Ornstein-Uhlenbeck fit and half-life | Int | C1a | `features/cross_asset/pair_math.py` (OU section), `strategies/statarb/ou.py` | OU tests pass; T6 delegates to `fit_ou` | Done |
 | [SS4](handoff/tasks/SS4.md) | Pairs candidate generator (platform parity) | Adv | SS2, SS3, T1 | `strategies/statarb/pairs.py`, `configs/strategies/statarb/pairs.yaml` | All `pairs_trading` goldens pass | Open |
 
