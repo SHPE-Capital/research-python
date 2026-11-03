@@ -106,3 +106,24 @@ The value on a row must be computable at that row's `ts_available` from that
 row and earlier rows only. `assert_no_lookahead(feature, bars)` recomputes the
 feature on truncated histories and fails if any value changes. Every feature
 test calls it.
+
+### Context symbols (C1d)
+
+A feature that reads symbols it does not trade (SPY, a sector ETF, a pair leg) declares
+`context_symbols` (class attribute or instance attribute from a constructor param) and takes
+`compute(bars, context)`, where `context` maps each declared symbol to its bars.
+`compute_features(bars, features, context=None)` passes it and raises if a declared symbol is missing.
+
+- Context symbols appear in the bars frame with a `role` of `context` (snapshot roles) and are never in the
+  dataset rows or the trade universe unless also listed as trade symbols.
+- `align_context(bars, ctx, column)` returns, per row, the latest context value of the same session with
+  `ctx.ts_available <= bars.ts_available`. Nothing later is used, and a session with no context bar gives NaN.
+- Features without `context_symbols` are unchanged.
+- Pending lead review: this is an additive change and calls for a `CONTRACT_VERSION` minor bump, which is NOT
+  made in this packet (see the C1d report).
+
+## Transforms (C1d)
+
+A cross-sectional transform (`transforms/`) maps the feature frame (`symbol`, `decision_ts`, columns) to one
+float64 column, grouping by `decision_ts` only. Timestamps with fewer than `min_count` usable rows give NaN.
+Column names are `<type>_<column>`. Registered with `@register_transform`.
