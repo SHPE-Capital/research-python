@@ -292,7 +292,7 @@ function Test-PromptText([string]$id, [string]$text) {
 function Get-Rules([string]$branch) {
     $r = @()
     $r += 'You are running unattended: nobody will answer questions, so never wait for input. Where AGENTS.md or CLAUDE.md say to ask first (a contract change or version bump, a dependency that is not in the handoff table, editing a file another packet owns), do not make that change; list it under Questions in your final report and finish everything else.'
-    $r += "You are authorised to commit. When uv run ruff check and uv run pytest both pass, commit all of your work on branch $branch with a conventional commit message. Never commit to $BaseBranch or main, never push, never merge, and do not switch branches. The orchestrator merges your branch into $BaseBranch after rerunning the checks."
+    $r += "You are authorised to commit. When uv run ruff check and uv run pytest both pass, commit all of your work on branch $branch with a conventional commit message. Never commit to $BaseBranch or main, never merge your branch into them, never push, and do not switch branches. The orchestrator merges your branch into $BaseBranch after rerunning the checks."
     $r += 'Write scratch files outside the worktree. Leave the worktree clean: everything either committed or deleted.'
     $r += 'Finish with a report: files changed, tests added and their status, the ruff and pytest outcome, anything in the spec you could not satisfy, and questions for the owner of another task.'
     return $r
