@@ -1,0 +1,29 @@
+# M1a random forest on the hello-model setup. Swap type to random_forest_reg and label target to value for regression.
+# Runs fully offline on synthetic fixture bars:  uv run shpe run configs/experiments/random_forest.yaml
+name: random_forest_example
+seed: 7
+
+data:
+  source: fixture          # fixture | parquet | store | snapshot (see configs/experiments/README.md)
+  symbols: [AAA, BBB, CCC, DDD, EEE, FFF]
+  start: "2026-03-02"
+  end: "2026-08-28"
+
+session: regular           # regular | pre | post | all
+
+features:
+  - {type: past_return, window: 5}
+  - {type: past_return, window: 30}
+  - {type: minute_of_day}
+
+label:
+  type: forward_return
+  horizon_minutes: 30
+  target: sign             # sign -> classify fwd_return > 0; value -> regress fwd_return
+  sample_every_minutes: 15 # one decision per symbol every 15 minutes, to limit overlapping labels
+
+split: {train: 0.6, validation: 0.2, test: 0.2, gap_days: 0}
+
+model:
+  type: random_forest
+  params: {n_estimators: 500, max_depth: 8, min_samples_leaf: 50, max_features: sqrt, n_jobs: 1}
