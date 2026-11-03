@@ -53,7 +53,7 @@ changes; the spec stays in the stub docstring.
 |---|---|---|---|---|---|---|
 | [F1](handoff/tasks/F1.md) | Relative volume and the intraday volume curve | Beg–Int | | `features/volume/relative_volume.py` | `test_relative_volume` | Open |
 | [F2](handoff/tasks/F2.md) | Distance from session VWAP | Beg | | `features/volume/vwap_distance.py` | `test_vwap_distance` | Done |
-| [F3](handoff/tasks/F3.md) | Realized volatility | Beg | | `features/volatility/realized_vol.py` | `test_realized_vol` | Open |
+| [F3](handoff/tasks/F3.md) | Realized volatility | Beg | | `features/volatility/realized_vol.py` | `test_realized_vol` | Done |
 | [F4](handoff/tasks/F4.md) | Opening-range width and breakout distance | Beg–Int | | `features/session/opening_range.py` | `test_opening_range`, for `range_minutes` 5, 15 and 30 | Done |
 | [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Open |
 | [F6](handoff/tasks/F6.md) | Order-flow features from tick minute summaries | Int | D3 | `features/microstructure/order_flow.py` | `test_order_flow` | Open |
@@ -97,11 +97,11 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | [C1d](handoff/tasks/C1d.md) | Context symbols and cross-sectional transforms | Int–Adv | C1a, C1o | `features/base.py` (`context`), `transforms/` | `context_symbols: [SPY]` config runs; contract bump reviewed | Open |
 | [C1e](handoff/tasks/C1e.md) | Daily frequency alongside minute bars | Int | C1a, C1o | `data/resample.py`, `features/daily/` | Daily config runs with the hello model | Open |
 | [C1f](handoff/tasks/C1f.md) | Fit schemes | Adv | C1a, V1 | `validation/schemes.py` | Hello model runs with each scheme; manifest records folds | Open |
-| [C1g](handoff/tasks/C1g.md) | Pluggable data sources | Int | C1a, C1h | `data/sources/` | Source tests pass; configs and goldens unchanged | Open |
+| [C1g](handoff/tasks/C1g.md) | Pluggable data sources | Int | C1a, C1h | `data/sources/` | Source tests pass; configs and goldens unchanged | Done |
 | [C1h](handoff/tasks/C1h.md) | Typed config schema and `StrategySpec` | Int | C1a | `config/` | Runner loads through `load_config`; golden unchanged | Open |
 | [C1i](handoff/tasks/C1i.md) | Baselines, permutation importance and by-era report sections | Int | C1a, E1 | `evaluation/baselines.py`, `evaluation/importance.py`, `evaluation/by_era.py` | Three sections render in the hello report | Open |
 | [C1j](handoff/tasks/C1j.md) | `shpe new` scaffolding framework | Beg–Int | C1a, C1k | `scaffold/`, `cli.py` (`new`) | `shpe new feature returns/demo --dry-run` prints the expected paths | Open |
-| [C1k](handoff/tasks/C1k.md) | Contributor check kits | Int | C1a, C1o | `testing/checks.py`, `testing/fixtures.py` | Check-kit tests pass | Open |
+| [C1k](handoff/tasks/C1k.md) | Contributor check kits | Int | C1a, C1o | `testing/checks.py`, `testing/fixtures.py` | Check-kit tests pass | Done |
 | [C1l](handoff/tasks/C1l.md) | Import-layer enforcement | Beg–Int | C1a, migration PR | `pyproject.toml` (`[tool.importlinter]`), `.github/workflows/ci.yml` | `lint-imports` passes in CI | Open |
 | [C1m](handoff/tasks/C1m.md) | Security master and point-in-time universe | Int–Adv | C1g, D4, D5 | `data/security_master.py`, `data/universe.py` (`as_of`) | `universe: {type: point_in_time}` config runs | Open |
 | [C1n](handoff/tasks/C1n.md) | Documentation site | Beg | C1a; best after most Wave 2 tasks | `mkdocs.yml`, `docs/api/` | `mkdocs build --strict` passes in CI | Open |
