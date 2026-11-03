@@ -119,7 +119,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | [T6](handoff/tasks/T6.md) | Trade analysis: holding, excursions, surfaces | Int–Adv | T1, E1 | `analysis/` | Team guides' holding and stop steps run on fixtures | Open |
 | [T7](handoff/tasks/T7.md) | Platform config export and parity check | Adv | C1h, T1, T2, T4, T5 | `deploy/platform_config.py`, `deploy/parity.py`, `tests/integration/golden/` | SR1 and SS4 pass their goldens; commission finding recorded | Open |
 | [T8](handoff/tasks/T8.md) | Strategy spec card and strategy template | Beg–Int | C1h, C1j, T7 | `scaffold/templates/strategy/`, `strategies/card.py` | SR1 has a rendered card | Open |
-| [T9](handoff/tasks/T9.md) | Portfolio construction | Int–Adv | C1a, C1d, T5 | `portfolio/construct.py` | W8 builds its portfolios through `construct.py` | Open |
+| [T9](handoff/tasks/T9.md) | Portfolio construction | Int–Adv | C1a, C1d, T5 | `portfolio/construct.py` | W8 builds its portfolios through `construct.py` | Done |
 
 ## Strategy families (S)
 
