@@ -10,12 +10,14 @@ from shpe_research.features.base import (
 )
 from shpe_research.features.returns.past_return import PastReturn
 from shpe_research.features.session.minute_of_session import MinuteOfSession
+from shpe_research.features.volatility.realized_vol import RealizedVol
 
 __all__ = [
     "FEATURE_REGISTRY",
     "Feature",
     "MinuteOfSession",
     "PastReturn",
+    "RealizedVol",
     "assert_no_lookahead",
     "build_feature",
     "compute_features",
