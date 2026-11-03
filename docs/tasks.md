@@ -113,7 +113,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 |---|---|---|---|---|---|---|
 | [T1](handoff/tasks/T1.md) | Exit policies and trade simulator | Adv | C1a, C1o | `trade/types.py`, `trade/exits.py`, `trade/simulate.py` | Simulator and fill tests pass; hello golden unchanged | Open |
 | [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Done (simulate_trades wiring waits on T1) |
-| [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Open |
+| [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Done |
 | [T4](handoff/tasks/T4.md) | Risk limits | Int | C1a | `trade/risk.py` | `simulate_trades(..., risk=...)` rejects with reasons | Open |
 | [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Done (calibration pending R5) |
 | [T6](handoff/tasks/T6.md) | Trade analysis: holding, excursions, surfaces | Int–Adv | T1, E1 | `analysis/` | Team guides' holding and stop steps run on fixtures | Open |
