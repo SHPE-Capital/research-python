@@ -1,0 +1,34 @@
+# M2 hello sweep: a 2x2 grid over the hello-model setup, on fixture bars (offline).
+#   uv run shpe sweep configs/experiments/sweeps/hello_sweep.yaml
+# Every point is one run (runs/<stamp>-<name>-<nnn>/) and one MLflow run (local ./mlruns).
+# List grid values from simplest to most complex: ties within one standard error go to the simpler one.
+kind: sweep
+metric: validation.ic_mean   # selection uses validation metrics only; test.* is refused
+direction: maximize
+
+grid:
+  model.params.C: [0.1, 1.0]
+  seed: [1, 2]
+
+base:
+  name: hello_sweep
+  seed: 7
+  data:
+    source: fixture
+    symbols: [AAA, BBB, CCC]
+    start: "2026-03-02"
+    end: "2026-05-29"
+  session: regular
+  features:
+    - {type: past_return, window: 5}
+    - {type: past_return, window: 30}
+    - {type: minute_of_day}
+  label:
+    type: forward_return
+    horizon_minutes: 30
+    target: sign
+    sample_every_minutes: 15
+  split: {train: 0.6, validation: 0.2, test: 0.2, gap_days: 0}
+  model:
+    type: logistic
+    params: {C: 1.0}
