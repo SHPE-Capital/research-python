@@ -1,0 +1,26 @@
+"""{{class_name}} model (scaffolded by `shpe new model`).
+
+TODO: replace this placeholder estimator. Scaling is fitted on the training rows inside fit() (SklearnModel).
+
+Config:
+    model:
+      type: {{name}}
+      params: {C: 1.0}
+"""
+
+from __future__ import annotations
+
+from sklearn.linear_model import LogisticRegression
+
+from shpe_research.contracts.model import register_model
+from shpe_research.models.sklearn_base import SklearnModel
+
+
+@register_model
+class {{class_name}}Model(SklearnModel):
+    model_type = "{{name}}"
+    task = "classification"
+
+    def make_estimator(self):
+        # TODO: swap in the real estimator.
+        return LogisticRegression(C=float(self.params.get("C", 1.0)), max_iter=1000, random_state=self.seed)

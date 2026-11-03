@@ -1,0 +1,12 @@
+description = "A model plus a test that runs check_model"
+parts = ["name"]
+identifier = ["name"]
+next_steps = "Next: add `from shpe_research.models.{{name}} import {{class_name}}Model` and an `__all__` entry to src/shpe_research/models/__init__.py (registration only, alphabetical), then replace the TODO body."
+
+[[files]]
+source = "model.py.tmpl"
+path = "src/shpe_research/models/{{name}}.py"
+
+[[files]]
+source = "test_model.py.tmpl"
+path = "tests/unit/models/test_{{name}}.py"
