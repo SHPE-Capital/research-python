@@ -103,7 +103,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | [C1j](handoff/tasks/C1j.md) | `shpe new` scaffolding framework | Beg–Int | C1a, C1k | `scaffold/`, `cli.py` (`new`) | `shpe new feature returns/demo --dry-run` prints the expected paths | Open |
 | [C1k](handoff/tasks/C1k.md) | Contributor check kits | Int | C1a, C1o | `testing/checks.py`, `testing/fixtures.py` | Check-kit tests pass | Done |
 | [C1l](handoff/tasks/C1l.md) | Import-layer enforcement | Beg–Int | C1a, migration PR | `pyproject.toml` (`[tool.importlinter]`), `.github/workflows/ci.yml` | `lint-imports` passes in CI | Open |
-| [C1m](handoff/tasks/C1m.md) | Security master and point-in-time universe | Int–Adv | C1g, D4, D5 | `data/security_master.py`, `data/universe.py` (`as_of`) | `universe: {type: point_in_time}` config runs | Open |
+| [C1m](handoff/tasks/C1m.md) | Security master and point-in-time universe | Int–Adv | C1g, D4, D5 | `data/security_master.py`, `data/universe.py` (`as_of`) | `universe: {type: point_in_time}` config runs | Done |
 | [C1n](handoff/tasks/C1n.md) | Documentation site | Beg | C1a; best after most Wave 2 tasks | `mkdocs.yml`, `docs/api/` | `mkdocs build --strict` passes in CI | Open |
 | [C1o](handoff/tasks/C1o.md) | Synthetic fixture options with planted effects | Int–Adv | C1a, migration PR | `data/fixtures.py` | Every effect recovered by its test; defaults unchanged | Open |
 
