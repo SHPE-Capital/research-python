@@ -130,7 +130,7 @@ study uses which task.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [SM1](handoff/tasks/SM1.md) | Opening-range breakout candidate generator | Int | C1b, T1 | `strategies/momentum/orb.py`, `configs/strategies/momentum/orb.yaml` | Config runs end to end on the fixture | Open |
-| [SM2](handoff/tasks/SM2.md) | EMA crossover baseline | Beg | C1a | `strategies/momentum/ema_cross.py`, `configs/strategies/momentum/ema_cross.yaml` | Config runs on the fixture | Open |
+| [SM2](handoff/tasks/SM2.md) | EMA crossover baseline | Beg | C1a | `strategies/momentum/ema_cross.py`, `configs/strategies/momentum/ema_cross.yaml` | Config runs on the fixture | Done |
 | [SM3](handoff/tasks/SM3.md) | Cross-sectional 12-1 momentum | Int | C1d, C1e | `strategies/momentum/xs_momentum.py`, `configs/strategies/momentum/xs_momentum.yaml` | Config runs on the daily fixture | Open |
 | [SR1](handoff/tasks/SR1.md) | Bar-fade baseline (platform parity) | Int | C1a, T1 | `strategies/reversal/bar_fade.py`, `configs/strategies/reversal/bar_fade.yaml` | All `minute_reversal` goldens pass | Open |
 | [SR2](handoff/tasks/SR2.md) | Stretch fade | Int–Adv | T1, F2, F3 | `strategies/reversal/stretch.py`, `configs/strategies/reversal/stretch_fade.yaml` | Config runs end to end | Open |
