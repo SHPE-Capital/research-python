@@ -113,7 +113,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 |---|---|---|---|---|---|---|
 | [T1](handoff/tasks/T1.md) | Exit policies and trade simulator | Adv | C1a, C1o | `trade/types.py`, `trade/exits.py`, `trade/simulate.py` | Simulator and fill tests pass; hello golden unchanged | Open |
 | [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Done (simulate_trades wiring waits on T1) |
-| [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Open |
+| [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Done |
 | [T4](handoff/tasks/T4.md) | Risk limits | Int | C1a | `trade/risk.py` | `simulate_trades(..., risk=...)` rejects with reasons | Open |
 | [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Done (calibration pending R5) |
 | [T6](handoff/tasks/T6.md) | Trade analysis: holding, excursions, surfaces | Int–Adv | T1, E1 | `analysis/` | Team guides' holding and stop steps run on fixtures | Open |
@@ -130,7 +130,7 @@ study uses which task.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [SM1](handoff/tasks/SM1.md) | Opening-range breakout candidate generator | Int | C1b, T1 | `strategies/momentum/orb.py`, `configs/strategies/momentum/orb.yaml` | Config runs end to end on the fixture | Open |
-| [SM2](handoff/tasks/SM2.md) | EMA crossover baseline | Beg | C1a | `strategies/momentum/ema_cross.py`, `configs/strategies/momentum/ema_cross.yaml` | Config runs on the fixture | Open |
+| [SM2](handoff/tasks/SM2.md) | EMA crossover baseline | Beg | C1a | `strategies/momentum/ema_cross.py`, `configs/strategies/momentum/ema_cross.yaml` | Config runs on the fixture | Done |
 | [SM3](handoff/tasks/SM3.md) | Cross-sectional 12-1 momentum | Int | C1d, C1e | `strategies/momentum/xs_momentum.py`, `configs/strategies/momentum/xs_momentum.yaml` | Config runs on the daily fixture | Open |
 | [SR1](handoff/tasks/SR1.md) | Bar-fade baseline (platform parity) | Int | C1a, T1 | `strategies/reversal/bar_fade.py`, `configs/strategies/reversal/bar_fade.yaml` | All `minute_reversal` goldens pass | Open |
 | [SR2](handoff/tasks/SR2.md) | Stretch fade | Int–Adv | T1, F2, F3 | `strategies/reversal/stretch.py`, `configs/strategies/reversal/stretch_fade.yaml` | Config runs end to end | Open |
@@ -149,7 +149,7 @@ Example folders are `workshop/NN_slug/`, tests are
 
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
-| [W0](handoff/tasks/W0.md) | Workshop infrastructure | Int | C1o | `workshop/README.md`, `workshop/_common/`, `tests/workshop/`, `pyproject.toml` (`workshop` group) | `uv sync --group workshop` works; harness test passes | Open |
+| [W0](handoff/tasks/W0.md) | Workshop infrastructure | Int | C1o | `workshop/README.md`, `workshop/_common/`, `tests/workshop/`, `pyproject.toml` (`workshop` group) | `uv sync --group workshop` works; harness test passes | Done |
 | [W1](handoff/tasks/W1.md) | Leakage lab | Beg–Int | W0, C0, D4, D5 | `workshop/01_leakage_lab/` | Tests pass on the solutions branch | Open |
 | [W2](handoff/tasks/W2.md) | Intraday model comparison | Int | W0, M1a–M1c, F1, F2, F3, F5, C1f or V1 | `workshop/02_intraday_model_comparison/` | Notebook runs with `--extra ml` | Open |
 | [W3](handoff/tasks/W3.md) | Cross-sectional ranker | Int–Adv | W0, C1a, C1b, C1d, C1e, L1, V1, E1, M1b, SM3 | `workshop/03_cross_sectional_ranker/`, `models/ridge.py`, `models/identity.py` | Five configs run from the notebook | Open |
