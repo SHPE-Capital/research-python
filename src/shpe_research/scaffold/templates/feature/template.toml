@@ -1,0 +1,15 @@
+description = "A per-symbol feature plus a test that runs check_feature"
+parts = ["subpackage", "name"]
+identifier = ["name"]
+next_steps = "Next: add `from shpe_research.features.{{subpackage}}.{{name}} import {{class_name}}` and an `__all__` entry to src/shpe_research/features/__init__.py (registration only, alphabetical), then replace the TODO body."
+
+[allowed]
+subpackage = ["cross_asset", "microstructure", "regime", "returns", "session", "volatility", "volume"]
+
+[[files]]
+source = "feature.py.tmpl"
+path = "src/shpe_research/features/{{subpackage}}/{{name}}.py"
+
+[[files]]
+source = "test_feature.py.tmpl"
+path = "tests/unit/features/{{subpackage}}/test_{{name}}.py"

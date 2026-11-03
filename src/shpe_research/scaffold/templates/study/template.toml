@@ -1,0 +1,17 @@
+description = "A study folder with README, config and notes"
+parts = ["team", "slug"]
+
+[allowed]
+team = ["momentum", "reversals", "stat-arb"]
+
+[[files]]
+source = "README.md.tmpl"
+path = "studies/{{team}}/{{slug}}/README.md"
+
+[[files]]
+source = "config.yaml.tmpl"
+path = "studies/{{team}}/{{slug}}/config.yaml"
+
+[[files]]
+source = "notes.md.tmpl"
+path = "studies/{{team}}/{{slug}}/notes.md"
