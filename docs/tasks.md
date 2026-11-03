@@ -68,7 +68,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 |---|---|---|---|---|---|---|
 | L1 | Forward returns at several horizons, cost- and volatility-adjusted variants | Beg | | `labels/multi_horizon.py` | `test_multi_horizon` | Open |
 | [L2](handoff/tasks/L2.md) | Exit-policy (stop/target/time) labels using the platform's bar fill rules. Superseded in part by T1: L2 is now a thin wrapper over `trade/` | Int | T1, C1c | `labels/exit_policy.py` | Shim tests pass, plus reconciliation with the platform on 5 sessions | Open |
-| [V1](handoff/tasks/V1.md) | Purged walk-forward splitter with embargo | Int | | `validation/purged.py` | `test_purged_walk_forward` | Open |
+| [V1](handoff/tasks/V1.md) | Purged walk-forward splitter with embargo | Int | | `validation/purged.py` | `test_purged_walk_forward` | Done |
 
 ## Evaluation
 
