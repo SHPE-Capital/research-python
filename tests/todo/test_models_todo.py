@@ -31,6 +31,8 @@ def dataset():
 def test_m1_models(dataset, tmp_path, module, cls, params):
     import importlib
 
+    if module == "gradient_boosting":
+        pytest.importorskip("lightgbm", reason="needs the optional ml extra: uv sync --extra ml")
     model_cls = getattr(importlib.import_module(f"shpe_research.models.{module}"), cls)
     train = dataset.subset("train")
     model = model_cls(seed=1, **params).fit(train)
