@@ -10,6 +10,7 @@ from shpe_research.features.base import (
 )
 from shpe_research.features.cross_asset.market_return import MarketBeta, MarketReturn
 from shpe_research.features.cross_asset.pair_spread import PairSpreadZScore
+from shpe_research.features.microstructure.order_flow import SignedVolumeRatio
 from shpe_research.features.regime.regime import RegimeFeature
 from shpe_research.features.returns.past_return import PastReturn
 from shpe_research.features.session.minute_of_session import MinuteOfSession
@@ -31,6 +32,7 @@ __all__ = [
     "RelativeVolume",
     "RealizedVol",
     "RegimeFeature",
+    "SignedVolumeRatio",
     "VwapDistance",
     "assert_no_lookahead",
     "build_feature",
