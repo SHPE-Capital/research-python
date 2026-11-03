@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from shpe_research.contracts.base import to_utc_ns
 
 
-@pytest.mark.skip(reason="TODO(V1)")
 def test_purged_walk_forward():
     from shpe_research.validation.purged import purged_walk_forward
 
