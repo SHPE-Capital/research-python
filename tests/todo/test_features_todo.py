@@ -60,9 +60,8 @@ def test_realized_vol(month):
     assert_no_lookahead(RealizedVol(window=15), month)
 
 
-@pytest.mark.skip(reason="TODO(F4)")
 def test_opening_range():
-    from shpe_research.features.opening_range import OpeningRangeBreakoutDistance, OpeningRangeWidth
+    from shpe_research.features.session.opening_range import OpeningRangeBreakoutDistance, OpeningRangeWidth
 
     bars = synthetic_bars(symbols=["AAA"], start="2026-10-01", end="2026-10-01")
     first15 = bars.index[:15]
