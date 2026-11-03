@@ -11,6 +11,7 @@ from shpe_research.features.base import (
 from shpe_research.features.returns.past_return import PastReturn
 from shpe_research.features.session.minute_of_session import MinuteOfSession
 from shpe_research.features.volatility.realized_vol import RealizedVol
+from shpe_research.features.volume.vwap_distance import VwapDistance
 
 __all__ = [
     "FEATURE_REGISTRY",
@@ -18,6 +19,7 @@ __all__ = [
     "MinuteOfSession",
     "PastReturn",
     "RealizedVol",
+    "VwapDistance",
     "assert_no_lookahead",
     "build_feature",
     "compute_features",
