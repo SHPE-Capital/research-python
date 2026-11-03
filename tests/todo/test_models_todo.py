@@ -22,7 +22,7 @@ def dataset():
     ("module", "cls", "params"),
     [
         pytest.param("random_forest", "RandomForestModel", {"n_estimators": 50, "max_depth": 4},
-                     marks=pytest.mark.skip(reason="TODO(M1a)"), id="random_forest"),
+                     id="random_forest"),
         pytest.param("gradient_boosting", "LightGBMModel", {"n_estimators": 50},
                      marks=pytest.mark.skip(reason="TODO(M1b)"), id="lightgbm"),
         pytest.param("mlp", "MLPModel", {"hidden": [16, 8]},
@@ -55,3 +55,13 @@ def test_onnx_export(dataset, tmp_path):
     session = ort.InferenceSession(str(out / "model.onnx"))
     onnx_scores = session.run(None, {session.get_inputs()[0].name: golden.to_numpy(np.float32)})
     assert onnx_scores  # compare against model.predict(golden) within tolerance in your implementation
+
+
+def test_random_forest_regressor_round_trip(dataset, tmp_path):
+    from shpe_research.models.random_forest import RandomForestRegressorModel
+
+    train = dataset.subset("train")
+    model = RandomForestRegressorModel(seed=1, n_estimators=20, max_depth=3).fit(train)
+    assert model.predict(train.X).shape == (len(train),)
+    model.save(tmp_path / "r")
+    np.testing.assert_allclose(load_model(tmp_path / "r").predict(train.X), model.predict(train.X))

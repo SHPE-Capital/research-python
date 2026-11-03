@@ -53,7 +53,7 @@ changes; the spec stays in the stub docstring.
 |---|---|---|---|---|---|---|
 | [F1](handoff/tasks/F1.md) | Relative volume and the intraday volume curve | Beg–Int | | `features/volume/relative_volume.py` | `test_relative_volume` | Open |
 | [F2](handoff/tasks/F2.md) | Distance from session VWAP | Beg | | `features/volume/vwap_distance.py` | `test_vwap_distance` | Done |
-| [F3](handoff/tasks/F3.md) | Realized volatility | Beg | | `features/volatility/realized_vol.py` | `test_realized_vol` | Open |
+| [F3](handoff/tasks/F3.md) | Realized volatility | Beg | | `features/volatility/realized_vol.py` | `test_realized_vol` | Done |
 | [F4](handoff/tasks/F4.md) | Opening-range width and breakout distance | Beg–Int | | `features/session/opening_range.py` | `test_opening_range`, for `range_minutes` 5, 15 and 30 | Open |
 | [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Open |
 | [F6](handoff/tasks/F6.md) | Order-flow features from tick minute summaries | Int | D3 | `features/microstructure/order_flow.py` | `test_order_flow` | Open |
@@ -81,7 +81,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
-| M1a | Random forest | Beg | | `models/random_forest.py` | `test_m1_models[random_forest]` | Open |
+| M1a | Random forest | Beg | | `models/random_forest.py` | `test_m1_models[random_forest]` | Done |
 | M1b | LightGBM | Beg–Int | | `models/gradient_boosting.py` | `test_m1_models[lightgbm]` | Open |
 | M1c | Small neural network (chronological early stopping) | Int | | `models/mlp.py` | `test_m1_models[mlp]` | Open |
 | M2 | Config sweeps, seed ensembles, MLflow registry | Int | | `experiments/sweep.py` | `test_sweep`; every run visible in MLflow | Open |
