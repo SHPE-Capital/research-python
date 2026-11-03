@@ -44,6 +44,9 @@ def test_m1_models(dataset, tmp_path, module, cls, params):
 def test_onnx_export(dataset, tmp_path):
     import json
 
+    pytest.importorskip("onnxruntime")
+    pytest.importorskip("skl2onnx")
+
     import onnxruntime as ort
     import pandas as pd
 
@@ -71,6 +74,8 @@ def test_onnx_export(dataset, tmp_path):
 
 
 def test_onnx_export_fails_outside_tolerance(dataset, tmp_path):
+    pytest.importorskip("skl2onnx")
+    pytest.importorskip("onnxruntime")
     from shpe_research.models.export_onnx import export_onnx
     from shpe_research.models.logistic import LogisticModel
 
@@ -81,6 +86,8 @@ def test_onnx_export_fails_outside_tolerance(dataset, tmp_path):
 
 
 def test_onnx_export_cli(tmp_path):
+    pytest.importorskip("skl2onnx")
+    pytest.importorskip("onnxruntime")
     from shpe_research.cli import main
     from shpe_research.experiments.runner import ExperimentConfig, run_experiment
 

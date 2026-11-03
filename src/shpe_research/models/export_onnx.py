@@ -19,7 +19,7 @@ row used here is known later than the model's decision time.
 
 Supported models: those built on `SklearnModel` (a fitted `pipeline_`),
 converted with skl2onnx. Other model families raise NotImplementedError.
-Needs `uv sync --extra ml`.
+Needs `uv sync --extra ml`; without it export_onnx raises NotImplementedError.
 """
 
 from __future__ import annotations
@@ -46,8 +46,12 @@ def _convert(model: Model, n_features: int) -> bytes:
         raise NotImplementedError(
             f"{model.model_type}: ONNX export supports scikit-learn pipeline models only"
         )
-    from skl2onnx import convert_sklearn
-    from skl2onnx.common.data_types import FloatTensorType
+    try:
+        import onnxruntime  # noqa: F401
+        from skl2onnx import convert_sklearn
+        from skl2onnx.common.data_types import FloatTensorType
+    except ImportError as exc:
+        raise NotImplementedError("ONNX export needs the ml extra: uv sync --extra ml") from exc
 
     final = pipeline.steps[-1][1]
     options = {id(final): {"zipmap": False}} if model.task == "classification" else None
