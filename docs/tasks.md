@@ -55,7 +55,7 @@ changes; the spec stays in the stub docstring.
 | [F2](handoff/tasks/F2.md) | Distance from session VWAP | Beg | | `features/volume/vwap_distance.py` | `test_vwap_distance` | Done |
 | [F3](handoff/tasks/F3.md) | Realized volatility | Beg | | `features/volatility/realized_vol.py` | `test_realized_vol` | Done |
 | [F4](handoff/tasks/F4.md) | Opening-range width and breakout distance | Beg–Int | | `features/session/opening_range.py` | `test_opening_range`, for `range_minutes` 5, 15 and 30 | Done |
-| [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Open |
+| [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Done |
 | [F6](handoff/tasks/F6.md) | Order-flow features from tick minute summaries | Int | D3 | `features/microstructure/order_flow.py` | `test_order_flow` | Open |
 | [F7](handoff/tasks/F7-F8.md) | Pair spread z-score, hedge ratio and half-life | Int | C1d, SS2, SS3 | `features/cross_asset/pair_spread.py` | `test_pair_spread` | Open |
 | [F8](handoff/tasks/F7-F8.md) | Market (SPY) return and β at decision time | Int | C1d | `features/cross_asset/market_return.py` | `test_market_return` | Open |
@@ -75,7 +75,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [E1](handoff/tasks/E1.md) | IC decay, turnover, cost-adjusted P&L, by-group breakdowns | Int | C1a; L1 (for decay) | `evaluation/trading.py` | `test_trading_metrics`; written into every report | Open |
-| [E2](handoff/tasks/E2.md) | Block bootstrap, deflated Sharpe, probability of backtest overfitting | Adv | | `evaluation/stats.py` | `test_stats` | Open |
+| [E2](handoff/tasks/E2.md) | Block bootstrap, deflated Sharpe, probability of backtest overfitting | Adv | | `evaluation/stats.py` | `test_stats` | Done |
 
 ## Models and experiments
 

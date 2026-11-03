@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from tests.conftest import HELLO
 
@@ -22,7 +21,6 @@ def test_trading_metrics(tmp_path):
     assert metrics["cost_adjusted"][5] < metrics["cost_adjusted"][0]
 
 
-@pytest.mark.skip(reason="TODO(E2)")
 def test_stats():
     from shpe_research.evaluation.stats import block_bootstrap, deflated_sharpe
 
