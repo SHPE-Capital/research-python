@@ -13,7 +13,7 @@ from shpe_research.features.base import FEATURE_REGISTRY, Feature
 from shpe_research.testing.checks import check_feature, check_label, check_model, check_strategy
 from shpe_research.testing.fixtures import check_bars, synthetic_bars, synthetic_xy
 
-_FEATURE_PARAMS = {"past_return": {"window": 5}}
+_FEATURE_PARAMS = {"past_return": {"window": 5}, "relative_volume": {"lookback_sessions": 1}}
 
 
 def _build_feature(key: str) -> Feature:
