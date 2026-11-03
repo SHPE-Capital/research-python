@@ -56,7 +56,7 @@ class RegimeFeature(Feature):
     requires = ("close", "ts", "ts_available")
     MEASURES = ("variance_ratio", "autocorr", "efficiency")
 
-    def __init__(self, measure: str, window: int = 60):
+    def __init__(self, measure: str = "variance_ratio", window: int = 30):
         if measure not in self.MEASURES:
             raise ValueError(f"measure must be one of {self.MEASURES}")
         self.measure = measure

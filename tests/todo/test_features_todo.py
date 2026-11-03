@@ -36,9 +36,8 @@ def test_relative_volume(month):
     assert_no_lookahead(feature, month)
 
 
-@pytest.mark.skip(reason="TODO(F2)")
 def test_vwap_distance(month):
-    from shpe_research.features.vwap_distance import VwapDistance
+    from shpe_research.features.volume.vwap_distance import VwapDistance
 
     values = VwapDistance().compute(month)
     days = session_date(month["ts"])
@@ -48,9 +47,8 @@ def test_vwap_distance(month):
     assert_no_lookahead(VwapDistance(), month)
 
 
-@pytest.mark.skip(reason="TODO(F3)")
 def test_realized_vol(month):
-    from shpe_research.features.realized_vol import RealizedVol
+    from shpe_research.features.volatility.realized_vol import RealizedVol
 
     values = RealizedVol(window=15).compute(month)
     days = session_date(month["ts"])
