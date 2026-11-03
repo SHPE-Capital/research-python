@@ -7,6 +7,7 @@ half-spread, 5 bps slippage, $0.005 per share.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 import pandas as pd
@@ -84,7 +85,7 @@ class RiskLimits:
 
 @dataclass(frozen=True)
 class CostModel:
-    """Transaction costs (T5)."""
+    """Transaction costs (T5). Spread and slippage are inside the fill price; see `trade/costs.py`."""
 
     half_spread_bps: float = 2.0
     slippage_bps: float = 5.0
@@ -92,3 +93,23 @@ class CostModel:
     impact_coef: float = 0.0
     impact_exponent: float = 0.5
     source: str = "platform_default"
+
+    @classmethod
+    def from_fill(cls, fill: FillModel) -> CostModel:
+        """Model with the fill model's spread, slippage and commission."""
+        from shpe_research.trade import costs
+
+        return costs.from_fill(fill)
+
+    @classmethod
+    def from_tca(cls, path: str | Path) -> CostModel:
+        """Calibrated model from a one-row R5 result table (csv or parquet)."""
+        from shpe_research.trade import costs
+
+        return costs.from_tca(path)
+
+    def cost(self, side: str, price: float, qty: float, adv: float | None = None) -> tuple[float, float]:
+        """`(cost_usd, cost_bps)` of one fill at reference `price`; impact applies when `adv` is given."""
+        from shpe_research.trade import costs
+
+        return costs.cost(self, side, price, qty, adv)

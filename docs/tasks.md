@@ -115,7 +115,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Open |
 | [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Open |
 | [T4](handoff/tasks/T4.md) | Risk limits | Int | C1a | `trade/risk.py` | `simulate_trades(..., risk=...)` rejects with reasons | Open |
-| [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Open |
+| [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Done (calibration pending R5) |
 | [T6](handoff/tasks/T6.md) | Trade analysis: holding, excursions, surfaces | Int–Adv | T1, E1 | `analysis/` | Team guides' holding and stop steps run on fixtures | Open |
 | [T7](handoff/tasks/T7.md) | Platform config export and parity check | Adv | C1h, T1, T2, T4, T5 | `deploy/platform_config.py`, `deploy/parity.py`, `tests/integration/golden/` | SR1 and SS4 pass their goldens; commission finding recorded | Open |
 | [T8](handoff/tasks/T8.md) | Strategy spec card and strategy template | Beg–Int | C1h, C1j, T7 | `scaffold/templates/strategy/`, `strategies/card.py` | SR1 has a rendered card | Open |
