@@ -41,7 +41,7 @@ start with `tests/`, `configs/`, `workshop/` or another top-level folder.
 | D3 | Quotes/trades downloader plus minute summaries | Int | D1 | `data/ticks.py` | One week for 5 symbols | Done |
 | D4 | Universe builder: liquidity x volatility cells, seeded dev/held-out split | Beg | D1, D2 | `data/universe.py`, `configs/universe/` | Reproducible manifest | Done |
 | D5 | Frozen, versioned workshop dataset | Beg | D1, D4 | `data/snapshot.py` | Build, verify and load a snapshot | Done |
-| D6 | Corporate actions: confirm split gaps flagged by the audit | Beg–Int | D1, D2 | `data/corporate_actions.py` | `tests/todo/test_experiments_todo.py::test_corporate_actions` | Open |
+| D6 | Corporate actions: confirm split gaps flagged by the audit | Beg–Int | D1, D2 | `data/corporate_actions.py` | `tests/todo/test_experiments_todo.py::test_corporate_actions` | Done |
 
 ## Features
 
