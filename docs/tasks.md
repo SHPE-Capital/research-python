@@ -55,7 +55,7 @@ changes; the spec stays in the stub docstring.
 | [F2](handoff/tasks/F2.md) | Distance from session VWAP | Beg | | `features/volume/vwap_distance.py` | `test_vwap_distance` | Done |
 | [F3](handoff/tasks/F3.md) | Realized volatility | Beg | | `features/volatility/realized_vol.py` | `test_realized_vol` | Done |
 | [F4](handoff/tasks/F4.md) | Opening-range width and breakout distance | Beg–Int | | `features/session/opening_range.py` | `test_opening_range`, for `range_minutes` 5, 15 and 30 | Done |
-| [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Open |
+| [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Done |
 | [F6](handoff/tasks/F6.md) | Order-flow features from tick minute summaries | Int | D3 | `features/microstructure/order_flow.py` | `test_order_flow` | Open |
 | [F7](handoff/tasks/F7-F8.md) | Pair spread z-score, hedge ratio and half-life | Int | C1d, SS2, SS3 | `features/cross_asset/pair_spread.py` | `test_pair_spread` | Open |
 | [F8](handoff/tasks/F7-F8.md) | Market (SPY) return and β at decision time | Int | C1d | `features/cross_asset/market_return.py` | `test_market_return` | Open |
@@ -75,7 +75,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
 | [E1](handoff/tasks/E1.md) | IC decay, turnover, cost-adjusted P&L, by-group breakdowns | Int | C1a; L1 (for decay) | `evaluation/trading.py` | `test_trading_metrics`; written into every report | Open |
-| [E2](handoff/tasks/E2.md) | Block bootstrap, deflated Sharpe, probability of backtest overfitting | Adv | | `evaluation/stats.py` | `test_stats` | Open |
+| [E2](handoff/tasks/E2.md) | Block bootstrap, deflated Sharpe, probability of backtest overfitting | Adv | | `evaluation/stats.py` | `test_stats` | Done |
 
 ## Models and experiments
 
@@ -113,7 +113,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 |---|---|---|---|---|---|---|
 | [T1](handoff/tasks/T1.md) | Exit policies and trade simulator | Adv | C1a, C1o | `trade/types.py`, `trade/exits.py`, `trade/simulate.py` | Simulator and fill tests pass; hello golden unchanged | Open |
 | [T2](handoff/tasks/T2.md) | Sizing rules | Int | C1a | `trade/sizing.py` | `simulate_trades(..., sizing=...)` works | Done (simulate_trades wiring waits on T1) |
-| [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Open |
+| [T3](handoff/tasks/T3.md) | Entry filters | Beg–Int | C1a | `trade/filters.py` | `StrategySpec.filters` builds through the registry | Done |
 | [T4](handoff/tasks/T4.md) | Risk limits | Int | C1a | `trade/risk.py` | `simulate_trades(..., risk=...)` rejects with reasons | Open |
 | [T5](handoff/tasks/T5.md) | Cost model | Int | C1a; R5 for calibration | `trade/costs.py` | T1 uses `CostModel` for `cost` | Done (calibration pending R5) |
 | [T6](handoff/tasks/T6.md) | Trade analysis: holding, excursions, surfaces | Int–Adv | T1, E1 | `analysis/` | Team guides' holding and stop steps run on fixtures | Open |
@@ -149,7 +149,7 @@ Example folders are `workshop/NN_slug/`, tests are
 
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
-| [W0](handoff/tasks/W0.md) | Workshop infrastructure | Int | C1o | `workshop/README.md`, `workshop/_common/`, `tests/workshop/`, `pyproject.toml` (`workshop` group) | `uv sync --group workshop` works; harness test passes | Open |
+| [W0](handoff/tasks/W0.md) | Workshop infrastructure | Int | C1o | `workshop/README.md`, `workshop/_common/`, `tests/workshop/`, `pyproject.toml` (`workshop` group) | `uv sync --group workshop` works; harness test passes | Done |
 | [W1](handoff/tasks/W1.md) | Leakage lab | Beg–Int | W0, C0, D4, D5 | `workshop/01_leakage_lab/` | Tests pass on the solutions branch | Open |
 | [W2](handoff/tasks/W2.md) | Intraday model comparison | Int | W0, M1a–M1c, F1, F2, F3, F5, C1f or V1 | `workshop/02_intraday_model_comparison/` | Notebook runs with `--extra ml` | Open |
 | [W3](handoff/tasks/W3.md) | Cross-sectional ranker | Int–Adv | W0, C1a, C1b, C1d, C1e, L1, V1, E1, M1b, SM3 | `workshop/03_cross_sectional_ranker/`, `models/ridge.py`, `models/identity.py` | Five configs run from the notebook | Open |

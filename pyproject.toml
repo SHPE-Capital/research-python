@@ -36,6 +36,7 @@ shpe = "shpe_research.cli:main"
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.5", "import-linter>=2"]
 docs = ["mkdocs-material>=9", "mkdocstrings[python]>=0.25"]
+workshop = ["jupytext>=1.16", "jupyterlab>=4"]
 
 [build-system]
 requires = ["hatchling"]

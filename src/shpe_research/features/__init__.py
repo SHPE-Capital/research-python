@@ -8,6 +8,7 @@ from shpe_research.features.base import (
     compute_features,
     register_feature,
 )
+from shpe_research.features.regime.regime import RegimeFeature
 from shpe_research.features.returns.past_return import PastReturn
 from shpe_research.features.session.minute_of_session import MinuteOfSession
 from shpe_research.features.session.opening_range import OpeningRangeBreakoutDistance, OpeningRangeWidth
@@ -24,6 +25,7 @@ __all__ = [
     "PastReturn",
     "RelativeVolume",
     "RealizedVol",
+    "RegimeFeature",
     "VwapDistance",
     "assert_no_lookahead",
     "build_feature",
