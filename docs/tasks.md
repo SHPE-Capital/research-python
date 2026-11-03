@@ -85,7 +85,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 | M1b | LightGBM | Beg–Int | | `models/gradient_boosting.py` | `test_m1_models[lightgbm]` | Open |
 | M1c | Small neural network (chronological early stopping) | Int | | `models/mlp.py` | `test_m1_models[mlp]` | Done |
 | M2 | Config sweeps, seed ensembles, MLflow registry | Int | | `experiments/sweep.py` | `test_sweep`; every run visible in MLflow | Open |
-| [M3](handoff/tasks/M3.md) | ONNX export with golden parity rows for the platform | Int | | `models/export_onnx.py` | `test_onnx_export` | Open |
+| [M3](handoff/tasks/M3.md) | ONNX export with golden parity rows for the platform | Int | | `models/export_onnx.py` | `test_onnx_export` | Done |
 
 ## Architecture (C1)
 

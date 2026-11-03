@@ -282,6 +282,26 @@ def _add_data(sub) -> None:
 # ---------------------------------------------------------------- main
 
 
+def _export(args: argparse.Namespace) -> int:
+    """`shpe export <run_dir>/model`: write <run_dir>/export/ with model.onnx, manifest.json, golden.parquet.
+
+    Golden rows are the first N validation-split rows of the dataset rebuilt
+    from <run_dir>/config.yaml.
+    """
+    from shpe_research.contracts.model import load_model
+    from shpe_research.experiments.runner import ExperimentConfig, build_dataset
+    from shpe_research.experiments.sources import load_bars
+    from shpe_research.models.export_onnx import export_onnx
+
+    model_dir = Path(args.model_dir)
+    run_dir = model_dir.parent
+    cfg = ExperimentConfig.from_yaml(run_dir / "config.yaml")
+    golden = build_dataset(cfg, load_bars(cfg.data)).subset("validation").X.head(args.golden_rows)
+    out = export_onnx(load_model(model_dir), golden, run_dir / "export", tolerance=args.tolerance)
+    print(f"Exported to {out}")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="shpe", description="SHPE Capital research tools")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
@@ -289,6 +309,9 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_run(sub)
     _add_fixtures(sub)
     _add_data(sub)
+    from shpe_research.models.export_onnx import _add_export
+
+    _add_export(sub, _export)
     return parser
 
 
