@@ -9,7 +9,6 @@ import pytest
 from tests.conftest import HELLO
 
 
-@pytest.mark.skip(reason="TODO(E1)")
 def test_trading_metrics(tmp_path):
     from shpe_research.evaluation.trading import trading_metrics
     from shpe_research.experiments.runner import ExperimentConfig, run_experiment

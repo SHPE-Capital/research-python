@@ -33,8 +33,18 @@ def register_feature(cls: type[Feature]) -> type[Feature]:
 
 
 class Feature(ABC):
+    """A per-symbol feature.
+
+    A feature that reads other symbols (SPY, a sector ETF, a pair's other leg) sets `context_symbols`
+    (a class attribute, or an instance attribute built from a constructor param such as `benchmark` or
+    `other`) and accepts `context` in `compute`: `compute(bars, context)` where `context` maps each
+    declared symbol to its bars. Use `align_context` to read them; it only returns context values
+    known at the row's `ts_available`.
+    """
+
     feature_type: ClassVar[str]
     requires: ClassVar[tuple[str, ...]] = ("close",)
+    context_symbols: ClassVar[tuple[str, ...]] = ()
 
     @property
     @abstractmethod
@@ -59,9 +69,53 @@ def build_feature(spec: dict[str, Any]) -> Feature:
     return cls(**params)
 
 
-def compute_features(bars: pd.DataFrame, features: Iterable[Feature]) -> pd.DataFrame:
-    """Features for every symbol in `bars`: symbol, ts, ts_available plus one column per feature."""
+def align_context(bars: pd.DataFrame, ctx: pd.DataFrame, column: str) -> pd.Series:
+    """`ctx[column]` as known at each row of `bars`, aligned to `bars.index` (float64).
+
+    Inputs: one symbol's `bars` and one context symbol's bars `ctx` (contract bars with `ts_available`).
+    For each row the value is the latest `ctx` row of the SAME session date (New York) whose
+    `ts_available <= bars.ts_available` (backward as-of join, never forward). A context bar that becomes
+    available even 1 ns later is not used. If the context has no such bar in the row's session the value
+    is NaN: it is never carried over from the previous session or forward-filled across a gap.
+    """
+    from shpe_research.data.calendar import session_date
+
+    if len(ctx) == 0:
+        return pd.Series(np.nan, index=bars.index, dtype="float64")
+    left = pd.DataFrame(
+        {"ts_available": bars["ts_available"].to_numpy(), "session": session_date(bars["ts_available"]).to_numpy()}
+    )
+    left["_row"] = np.arange(len(left))
+    right = pd.DataFrame(
+        {
+            "ts_available": ctx["ts_available"].to_numpy(),
+            "session": session_date(ctx["ts_available"]).to_numpy(),
+            "value": ctx[column].to_numpy(dtype=float),
+        }
+    ).sort_values("ts_available", kind="stable")
+    left = left.sort_values("ts_available", kind="stable")
+    merged = pd.merge_asof(left, right, on="ts_available", by="session", direction="backward")
+    values = merged.sort_values("_row")["value"].to_numpy(dtype=float)
+    return pd.Series(values, index=bars.index, dtype="float64")
+
+
+def compute_features(
+    bars: pd.DataFrame,
+    features: Iterable[Feature],
+    context: dict[str, pd.DataFrame] | None = None,
+) -> pd.DataFrame:
+    """Features for every symbol in `bars`: symbol, ts, ts_available plus one column per feature.
+
+    `context` maps context-symbol names (SPY, ...) to their bars. It is passed only to features that declare
+    `context_symbols`; a missing symbol raises ValueError. Context symbols are read, never traded: the output
+    has rows only for the symbols in `bars`. Features without context behave exactly as before.
+    """
     features = list(features)
+    context = context or {}
+    for feature in features:
+        absent = [s for s in feature.context_symbols if s not in context]
+        if absent:
+            raise ValueError(f"feature {feature.name} needs context symbols {absent}; pass them as `context`")
     frames = []
     for _, group in bars.groupby("symbol", sort=True):
         group = group.sort_values("ts")
@@ -70,7 +124,10 @@ def compute_features(bars: pd.DataFrame, features: Iterable[Feature]) -> pd.Data
             missing = [c for c in feature.requires if c not in group.columns]
             if missing:
                 raise ValueError(f"feature {feature.name} needs columns {missing}")
-            values = feature.compute(group)
+            if feature.context_symbols:
+                values = feature.compute(group, {s: context[s] for s in feature.context_symbols})
+            else:
+                values = feature.compute(group)
             if not values.index.equals(group.index):
                 raise ValueError(f"feature {feature.name} returned values not aligned to its input rows")
             out[feature.name] = values.astype(float)

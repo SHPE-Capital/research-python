@@ -53,12 +53,42 @@ class ExitPolicy:
     entry_order: Literal["market", "stop"] = "market"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class SizingRule:
-    """Quantity rule (T2): fixed_qty, fixed_notional, risk_per_trade, inverse_vol, prob_to_size, kelly_fractional."""
+    """Quantity rule (T2): ``SizingRule(rule, **params)``.
 
-    rule: str = "native"
-    params: dict[str, Any] | None = None
+    Rules: native, fixed_qty, fixed_notional, risk_per_trade, inverse_vol, prob_to_size,
+    kelly_fractional (params per rule in ``trade/sizing.py``). Validated at construction.
+    ``size(candidates, bars, equity)`` returns whole-share quantities (see ``trade.sizing``).
+    A ``params={...}`` dict keyword is also accepted and merged with the keyword params.
+    """
+
+    rule: str
+    params: dict[str, Any]
+
+    def __init__(self, rule: str = "native", params: dict[str, Any] | None = None, **kwargs: Any) -> None:
+        from shpe_research.trade.sizing import validate_rule
+
+        merged = {**(params or {}), **kwargs}
+        validate_rule(rule, merged)
+        object.__setattr__(self, "rule", rule)
+        object.__setattr__(self, "params", merged)
+
+    def __hash__(self) -> int:
+        return hash((self.rule, tuple(sorted((k, str(v)) for k, v in self.params.items()))))
+
+    @property
+    def exportable(self) -> bool:
+        """True if the platform can run this rule today (fixed_qty, fixed_notional, native)."""
+        from shpe_research.trade.sizing import EXPORTABLE_RULES
+
+        return self.rule in EXPORTABLE_RULES
+
+    def size(self, candidates: pd.DataFrame, bars: pd.DataFrame, equity: float) -> pd.Series:
+        """Whole-share quantity per candidate row (int64, index of `candidates`); 0 means no trade."""
+        from shpe_research.trade.sizing import size_candidates
+
+        return size_candidates(self, candidates, bars, equity)
 
 
 @dataclass(frozen=True)

@@ -6,6 +6,7 @@ import sys
 import pytest
 
 from shpe_research.contracts import candidates
+from shpe_research.contracts.base import ContractError
 
 
 def test_schema_names():
@@ -16,8 +17,8 @@ def test_schema_names():
     }
 
 
-def test_validator_is_a_stub():
-    with pytest.raises(NotImplementedError, match="C1b"):
+def test_validator_rejects_non_frames():
+    with pytest.raises(ContractError):
         candidates.validate_candidates(None)
 
 
