@@ -117,11 +117,6 @@ def execute_sweep(
     from shpe_research.config.sweep import SweepConfig
     from shpe_research.experiments.runner import ExperimentConfig, run_experiment
 
-    try:
-        import mlflow
-    except ImportError as exc:  # pragma: no cover - depends on the environment
-        raise ImportError("sweeps log to MLflow: run `uv sync --extra ml`") from exc
-
     path = Path(config_path)
     raw = yaml.safe_load(path.read_text())
     sweep = SweepConfig.model_validate(raw)
@@ -136,6 +131,11 @@ def execute_sweep(
     for _, cfg in points:
         TypedConfig.model_validate(cfg)  # fail on a bad grid value before anything runs
     axes = [k for k in sweep.grid if k != "seed"]
+
+    try:  # imported after validation so config errors surface even without the ml extra
+        import mlflow
+    except ImportError as exc:  # pragma: no cover - depends on the environment
+        raise ImportError("sweeps log to MLflow: run `uv sync --extra ml`") from exc
 
     # MLflow 3 refuses the file store unless opted in; the spec's default is the local ./mlruns folder.
     os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
