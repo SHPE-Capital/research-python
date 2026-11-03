@@ -149,7 +149,7 @@ Example folders are `workshop/NN_slug/`, tests are
 
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
-| [W0](handoff/tasks/W0.md) | Workshop infrastructure | Int | C1o | `workshop/README.md`, `workshop/_common/`, `tests/workshop/`, `pyproject.toml` (`workshop` group) | `uv sync --group workshop` works; harness test passes | Open |
+| [W0](handoff/tasks/W0.md) | Workshop infrastructure | Int | C1o | `workshop/README.md`, `workshop/_common/`, `tests/workshop/`, `pyproject.toml` (`workshop` group) | `uv sync --group workshop` works; harness test passes | Done |
 | [W1](handoff/tasks/W1.md) | Leakage lab | Beg–Int | W0, C0, D4, D5 | `workshop/01_leakage_lab/` | Tests pass on the solutions branch | Open |
 | [W2](handoff/tasks/W2.md) | Intraday model comparison | Int | W0, M1a–M1c, F1, F2, F3, F5, C1f or V1 | `workshop/02_intraday_model_comparison/` | Notebook runs with `--extra ml` | Open |
 | [W3](handoff/tasks/W3.md) | Cross-sectional ranker | Int–Adv | W0, C1a, C1b, C1d, C1e, L1, V1, E1, M1b, SM3 | `workshop/03_cross_sectional_ranker/`, `models/ridge.py`, `models/identity.py` | Five configs run from the notebook | Open |
