@@ -81,7 +81,7 @@ Acceptance tests: `tests/todo/test_features_todo.py`.
 
 | ID | Task | Level | Depends on | Files | Done when | Status |
 |---|---|---|---|---|---|---|
-| M1a | Random forest | Beg | | `models/random_forest.py` | `test_m1_models[random_forest]` | Open |
+| M1a | Random forest | Beg | | `models/random_forest.py` | `test_m1_models[random_forest]` | Done |
 | M1b | LightGBM | Beg–Int | | `models/gradient_boosting.py` | `test_m1_models[lightgbm]` | Open |
 | M1c | Small neural network (chronological early stopping) | Int | | `models/mlp.py` | `test_m1_models[mlp]` | Open |
 | M2 | Config sweeps, seed ensembles, MLflow registry | Int | | `experiments/sweep.py` | `test_sweep`; every run visible in MLflow | Open |
