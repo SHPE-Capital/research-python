@@ -26,6 +26,7 @@ audited and reproduced.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,6 +40,7 @@ from shpe_research.config import data_dir, git_commit
 from shpe_research.contracts.version import CONTRACT_VERSION
 from shpe_research.data.audit import audit_bars
 from shpe_research.data.calendar import get_calendar
+from shpe_research.data.security_master import SecurityMaster
 from shpe_research.data.store import DataStore, StoreError
 
 log = logging.getLogger(__name__)
@@ -272,3 +274,17 @@ def required_downloads(cfg: UniverseConfig) -> list[dict[str, Any]]:
         calls.append({"symbols": symbols, "start": window[0], "end": window[-1], "timeframe": "1Min",
                       "adjustment": "raw"})
     return calls
+
+
+def point_in_time_members(universe: Mapping[str, Any], date) -> list[str]:
+    """Symbols of a `universe: {type: point_in_time, master: <path>, filters: {...}}` config as of `date`.
+
+    Uses only security-master rows valid on `date` (C1m), so later listings are absent and later delistings
+    are still present. D4's seeded builder above is unchanged.
+    """
+    if universe.get("type") != "point_in_time":
+        raise ValueError(f"expected universe type point_in_time, got {universe.get('type')!r}")
+    if not universe.get("master"):
+        raise ValueError("a point_in_time universe needs a `master` path")
+    master = SecurityMaster.load(universe["master"])
+    return master.members(date, universe.get("filters") or {})

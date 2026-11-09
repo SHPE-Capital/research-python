@@ -13,8 +13,8 @@ labels, models, evaluation) and records a decision. Library code belongs in
 
 | ID | Study | Team |
 |---|---|---|
-| [R1](r1-orb-selectors/) | ORB trade selectors A–D | Momentum |
-| [R2](r2-reversal-metalabel/) | Reversal meta-labeling | Reversals |
-| [R3](r3-pairs-clustering/) | Pair selection by clustering | Stat arb |
-| [R4](r4-microstructure-ofi/) | Order-flow imbalance | Microstructure |
-| [R5](r5-tca/) | Transaction cost analysis | Any |
+| [R1](momentum/r1-orb-selectors/) | ORB trade selectors A–D | Momentum |
+| [R2](reversals/r2-reversal-metalabel/) | Reversal meta-labeling | Reversals |
+| [R3](stat-arb/r3-pairs-clustering/) | Pair selection by clustering | Stat arb |
+| [R4](reversals/r4-microstructure-ofi/) | Order-flow imbalance | Microstructure |
+| [R5](shared/r5-tca/) | Transaction cost analysis | Any |

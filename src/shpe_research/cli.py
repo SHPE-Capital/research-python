@@ -36,6 +36,37 @@ def _add_run(sub) -> None:
     p.set_defaults(handler=_run)
 
 
+def _sweep(args: argparse.Namespace) -> int:
+    from shpe_research.experiments.sweep import (
+        default_tracking_uri,
+        execute_sweep,
+        select_best,
+        summarize,
+        trial_count,
+    )
+
+    uri = args.tracking_uri or default_tracking_uri()
+    runs, sweep = execute_sweep(args.config, out_root=args.out, tracking_uri=uri)
+    print(f"{len(runs)} runs; selection metric {sweep.metric} ({sweep.direction}), validation only")
+    for row in summarize(runs, sweep.metric):
+        print(f"  {row['config']}: mean {row['mean']:.5f} sd {row['sd']:.5f} over {row['n_seeds']} seed(s)")
+    try:
+        best = select_best(runs, sweep.metric, sweep.direction)
+        print(f"selected: {best['config']} (mean {best['mean']:.5f})")
+    except ValueError as exc:
+        print(f"no selection: {exc}")
+    print(f"trials recorded for {sweep.base.name!r}: {trial_count(uri, sweep.base.name)}")
+    return 0
+
+
+def _add_sweep(sub) -> None:
+    p = sub.add_parser("sweep", help="run a config grid and log every run to MLflow (M2)")
+    p.add_argument("config", type=Path, help="sweep YAML, e.g. configs/experiments/sweeps/hello_sweep.yaml")
+    p.add_argument("--out", type=Path, default=None, help="runs directory (default ./runs)")
+    p.add_argument("--tracking-uri", default=None, help="MLflow tracking URI (default ./mlruns)")
+    p.set_defaults(handler=_sweep)
+
+
 # ---------------------------------------------------------------- fixtures
 
 
@@ -282,13 +313,40 @@ def _add_data(sub) -> None:
 # ---------------------------------------------------------------- main
 
 
+def _export(args: argparse.Namespace) -> int:
+    """`shpe export <run_dir>/model`: write <run_dir>/export/ with model.onnx, manifest.json, golden.parquet.
+
+    Golden rows are the first N validation-split rows of the dataset rebuilt
+    from <run_dir>/config.yaml.
+    """
+    from shpe_research.contracts.model import load_model
+    from shpe_research.experiments.runner import ExperimentConfig, build_dataset
+    from shpe_research.experiments.sources import load_bars
+    from shpe_research.models.export_onnx import export_onnx
+
+    model_dir = Path(args.model_dir)
+    run_dir = model_dir.parent
+    cfg = ExperimentConfig.from_yaml(run_dir / "config.yaml")
+    golden = build_dataset(cfg, load_bars(cfg.data)).subset("validation").X.head(args.golden_rows)
+    out = export_onnx(load_model(model_dir), golden, run_dir / "export", tolerance=args.tolerance)
+    print(f"Exported to {out}")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="shpe", description="SHPE Capital research tools")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     _add_run(sub)
+    _add_sweep(sub)
     _add_fixtures(sub)
     _add_data(sub)
+    from shpe_research.scaffold.new import _add_new
+
+    _add_new(sub)
+    from shpe_research.models.export_onnx import _add_export
+
+    _add_export(sub, _export)
     return parser
 
 

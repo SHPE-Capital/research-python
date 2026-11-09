@@ -16,9 +16,8 @@ def month():
     return synthetic_bars(symbols=["AAA"], start="2026-04-01", end="2026-05-15")
 
 
-@pytest.mark.skip(reason="TODO(F1)")
 def test_relative_volume(month):
-    from shpe_research.features.relative_volume import RelativeVolume
+    from shpe_research.features.volume.relative_volume import RelativeVolume
 
     feature = RelativeVolume(lookback_sessions=20)
     values = feature.compute(month)
@@ -36,9 +35,8 @@ def test_relative_volume(month):
     assert_no_lookahead(feature, month)
 
 
-@pytest.mark.skip(reason="TODO(F2)")
 def test_vwap_distance(month):
-    from shpe_research.features.vwap_distance import VwapDistance
+    from shpe_research.features.volume.vwap_distance import VwapDistance
 
     values = VwapDistance().compute(month)
     days = session_date(month["ts"])
@@ -48,9 +46,8 @@ def test_vwap_distance(month):
     assert_no_lookahead(VwapDistance(), month)
 
 
-@pytest.mark.skip(reason="TODO(F3)")
 def test_realized_vol(month):
-    from shpe_research.features.realized_vol import RealizedVol
+    from shpe_research.features.volatility.realized_vol import RealizedVol
 
     values = RealizedVol(window=15).compute(month)
     days = session_date(month["ts"])
@@ -60,9 +57,8 @@ def test_realized_vol(month):
     assert_no_lookahead(RealizedVol(window=15), month)
 
 
-@pytest.mark.skip(reason="TODO(F4)")
 def test_opening_range():
-    from shpe_research.features.opening_range import OpeningRangeBreakoutDistance, OpeningRangeWidth
+    from shpe_research.features.session.opening_range import OpeningRangeBreakoutDistance, OpeningRangeWidth
 
     bars = synthetic_bars(symbols=["AAA"], start="2026-10-01", end="2026-10-01")
     first15 = bars.index[:15]
@@ -80,9 +76,8 @@ def test_opening_range():
     assert_no_lookahead(OpeningRangeBreakoutDistance(), bars)
 
 
-@pytest.mark.skip(reason="TODO(F5)")
 def test_regime_features():
-    from shpe_research.features.regime import RegimeFeature
+    from shpe_research.features.regime.regime import RegimeFeature
 
     reverting = synthetic_bars(symbols=["AAA"], start="2026-04-01", end="2026-04-30", signal_strength=0.5)
     assert RegimeFeature("variance_ratio", 60).compute(reverting).mean() < 1
@@ -91,9 +86,8 @@ def test_regime_features():
         assert_no_lookahead(RegimeFeature(measure, 60), reverting)
 
 
-@pytest.mark.skip(reason="TODO(F6): needs D3 minute summaries joined onto bars")
 def test_order_flow():
-    from shpe_research.features.order_flow import SignedVolumeRatio
+    from shpe_research.features.microstructure.order_flow import SignedVolumeRatio
 
     bars = pd.DataFrame(
         {

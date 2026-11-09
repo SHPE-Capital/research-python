@@ -1,0 +1,12 @@
+# SM2 EMA crossover baseline (platform has no ema_cross type; T7 refuses to export it).
+# Candidates only:  Candidates(strategy="configs/strategies/momentum/ema_cross.yaml").sample(bars)
+kind: strategy
+strategy_type: ema_cross
+params:
+  fast: 9
+  slow: 21
+  direction: long   # long | both
+  carry: false      # true: EMAs and position state run across sessions
+exit_policy:
+  use_signal_exits: true   # the opposite cross closes the trade
+  session_end: true        # flatten at the close (EMAs restart each session when carry is false)

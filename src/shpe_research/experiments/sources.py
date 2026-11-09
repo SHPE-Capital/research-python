@@ -5,73 +5,45 @@
     data: {source: store, symbols: [...], start: ..., end: ..., timeframe: 1Min, feed: sip, adjustment: raw}
     data: {source: snapshot, path: snapshots/workshop-v0.zip, role: dev, start: ..., end: ...}
           (role: all | dev | held_out | context; or list `symbols` explicitly)
+    data: {source: file, path: bars.csv, format: csv}
+    data: {source: alpaca, symbols: [...], start: ..., end: ..., feed: iex}
+
+The sources themselves live in `shpe_research.data.sources` (C1g); this module keeps the config-facing
+`load_bars` and the `SOURCES` key list so existing configs and imports keep working.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import pyarrow.parquet as pq
 
-from shpe_research.contracts.bars import table_to_bars, validate_bars
-from shpe_research.data.fixtures import synthetic_bars
+from shpe_research.contracts.bars import validate_bars
+from shpe_research.data.sources import SOURCE_REGISTRY, build_source, register_source
+from shpe_research.data.sources.base import _load_builtins
 
+__all__ = ["SOURCES", "SOURCE_REGISTRY", "build_source", "load_bars", "register_source"]
 
-def _fixture(cfg: dict[str, Any]) -> pd.DataFrame:
-    params = {k: v for k, v in cfg.items() if k in ("symbols", "start", "end", "seed", "signal_strength")}
-    return synthetic_bars(**params)
-
-
-def _parquet(cfg: dict[str, Any]) -> pd.DataFrame:
-    bars = table_to_bars(pq.read_table(Path(cfg["path"])))
-    return bars.sort_values(["symbol", "ts"], kind="stable").reset_index(drop=True)
-
-
-def _store(cfg: dict[str, Any]) -> pd.DataFrame:
-    from shpe_research.data.store import DataStore
-
-    return DataStore(cfg.get("root")).read_bars(
-        [s.upper() for s in cfg["symbols"]],
-        cfg["start"],
-        cfg["end"],
-        timeframe=cfg.get("timeframe", "1Min"),
-        feed=cfg.get("feed", "sip"),
-        adjustment=cfg.get("adjustment", "raw"),
-    )
-
-
-def _snapshot(cfg: dict[str, Any]) -> pd.DataFrame:
-    from shpe_research.data.snapshot import load_snapshot
-
-    snap = load_snapshot(cfg["path"])
-    symbols = cfg.get("symbols") or snap.symbols(cfg.get("role", "all"))
-    return snap.bars(
-        timeframe=cfg.get("timeframe", "1Min"),
-        adjustment=cfg.get("adjustment", "raw"),
-        symbols=[s.upper() for s in symbols],
-        start=cfg.get("start"),
-        end=cfg.get("end"),
-    )
-
-
-SOURCES: dict[str, Callable[[dict[str, Any]], pd.DataFrame]] = {
-    "fixture": _fixture,
-    "parquet": _parquet,
-    "store": _store,
-    "snapshot": _snapshot,
-}
+_ALIASES = {"parquet": "file"}  # legacy key: `source: parquet` is the file source with format parquet
+_LOAD_ARGS = ("symbols", "start", "end", "timeframe")
+_load_builtins()
+SOURCES = SOURCE_REGISTRY
 
 
 def load_bars(cfg: dict[str, Any]) -> pd.DataFrame:
-    """Contract bars for an experiment's `data` config section."""
-    source = cfg.get("source", "fixture")
-    try:
-        loader = SOURCES[source]
-    except KeyError:
-        raise ValueError(f"unknown data source {source!r}; known: {sorted(SOURCES)}") from None
-    bars = loader(cfg)
+    """Contract bars for an experiment's `data` config section (`source` or `type` names the source).
+
+    `symbols`, `start`, `end` and `timeframe` go to `Source.load`; every other key configures the source.
+    Result rows are checked against the bars contract. Timing: `ts_available` comes from the source.
+    """
+    params = {k: v for k, v in cfg.items() if k not in ("source", "type")}
+    key = cfg.get("source", cfg.get("type", "fixture"))
+    key = _ALIASES.get(key, key)
+    load_args = {k: params.pop(k) for k in _LOAD_ARGS if k in params}
+    if key == "file" and cfg.get("source") == "parquet":
+        params.setdefault("format", "parquet")
+    source = build_source({"type": key, **params})
+    bars = source.load(load_args.get("symbols"), load_args.get("start"), load_args.get("end"),
+                       load_args.get("timeframe", "1Min"))
     validate_bars(bars)
     return bars
