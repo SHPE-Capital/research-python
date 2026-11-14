@@ -1,0 +1,97 @@
+{
+  "profile": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.4",
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "cpu": "AMD64 Family 23 Model 113 Stepping 0, AuthenticAMD",
+    "cores_physical": 8,
+    "cores_logical": 16,
+    "ram_total_gb": 17.1,
+    "ram_available_gb": 3.4,
+    "scratch_free_gb": 80.7
+  },
+  "peak_rss_mb": 276.6,
+  "steps": [
+    {
+      "name": "1 one stock, few sessions (correctness)",
+      "status": "OK",
+      "detail": {
+        "io": {
+          "rows": 1950,
+          "generate_s": 0.182,
+          "parquet_mb": 0.15,
+          "write_mb_s": 5.4,
+          "read_s": 0.032,
+          "read_mb_s": 4.8
+        },
+        "candidates": 16,
+        "symbol_sessions": 5,
+        "cold_s_per_candidate": 5.765000000224063e-05,
+        "warm_s_per_candidate": 4.786874998785606e-05,
+        "cache_hit_rate_cold_pass": 0.938,
+        "cache_hit_rate_overall": 0.969,
+        "trades_total": 64,
+        "deterministic": true
+      }
+    },
+    {
+      "name": "2 30 stocks x 20 sessions (load + indicator profile)",
+      "status": "OK",
+      "detail": {
+        "io": {
+          "rows": 234000,
+          "generate_s": 0.128,
+          "parquet_mb": 12.83,
+          "write_mb_s": 67.0,
+          "read_s": 0.023,
+          "read_mb_s": 548.2
+        },
+        "session_split_s": 0.163,
+        "candidates": 256,
+        "symbol_sessions": 600,
+        "cold_s_per_candidate": 0.006079278125000087,
+        "warm_s_per_candidate": 0.005781258984374205,
+        "cache_hit_rate_cold_pass": 0.969,
+        "cache_hit_rate_overall": 0.984,
+        "trades_total": 123860
+      }
+    },
+    {
+      "name": "3 300-stock early+late calibration (>=256 candidates, finalists, account replay)",
+      "status": "BLOCKED",
+      "detail": {
+        "reason": "C4 account simulator (shpe_research.trade.account) and A6 panel not implemented"
+      }
+    },
+    {
+      "name": "4 consecutive weekly cycles (incremental reuse)",
+      "status": "BLOCKED",
+      "detail": {
+        "reason": "C4 account simulator (shpe_research.trade.account) and A6 panel not implemented"
+      }
+    }
+  ],
+  "projection": {
+    "cold": {
+      "weekend_job_hours": 0.054,
+      "weekend_job_vs_24h_target": 0.0023,
+      "full_run_hours_with_2x_reserve": 50.98
+    },
+    "warm": {
+      "weekend_job_hours": 0.052,
+      "weekend_job_vs_24h_target": 0.0022,
+      "full_run_hours_with_2x_reserve": 48.48
+    },
+    "assumptions": {
+      "n_symbols": 300,
+      "history_sessions": 252,
+      "candidates": 256,
+      "weeks": 52,
+      "policies": 3,
+      "seeds": 3,
+      "rerun_reserve": 2.0,
+      "note": "weeks/policies/seeds/history are PLACEHOLDERS until 0-F fixes scope; proxy kernel, not C4"
+    }
+  }
+}
