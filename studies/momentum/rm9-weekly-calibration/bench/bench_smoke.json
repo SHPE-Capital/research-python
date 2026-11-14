@@ -1,13 +1,13 @@
 {
   "meta": {
-    "kernel": "python",
-    "kernel_releases_gil": false,
+    "kernel": "fast",
+    "kernel_releases_gil": true,
     "smoke": true,
-    "pool_rule": "processes with panels memmapped read-only (kernel holds the GIL)",
-    "ram_budget_gb": 11.0,
-    "disk_budget_gb": 30.0,
+    "pool_rule": "threads (kernel releases GIL)",
+    "ram_budget_gb": 12.0,
+    "disk_budget_gb": 40.0,
     "panel_source": "synthetic (generate_synthetic_panel)",
-    "total_wall_s": 61.4
+    "total_wall_s": 4.1
   },
   "profile": {
     "os": "Windows-11-10.0.26200-SP0",
@@ -18,8 +18,8 @@
     "cores_physical": 8,
     "cores_logical": 16,
     "ram_total_gb": 17.1,
-    "ram_available_gb": 1.7,
-    "scratch_free_gb": 76.0
+    "ram_available_gb": 8.6,
+    "scratch_free_gb": 75.9
   },
   "params": {
     "weeks": 4,
@@ -41,10 +41,10 @@
       "name": "2 30 stocks x 20 sessions (load + indicator profile)",
       "symbols": 30,
       "sessions": 5,
-      "panel_build_s": 0.042,
+      "panel_build_s": 0.043,
       "disk_mb": 2.51,
-      "npy_read_mb_s": 23.6,
-      "mmap_open_s": 0.015,
+      "npy_read_mb_s": 27.3,
+      "mmap_open_s": 0.0128,
       "week_panel_with_prefix_build_s": 0.012,
       "indicator_hits_misses_cold_pass": {
         "adx": [
@@ -149,10 +149,10 @@
       "replay_cold": {
         "candidates": 4,
         "weeks": 1,
-        "wall_s": 5.8613,
-        "s_per_candidate_week": 1.4653369750001275,
-        "mask_cpu_s": 5.8236,
-        "sim_cpu_s": 0.0255,
+        "wall_s": 0.0779,
+        "s_per_candidate_week": 0.019467125000119267,
+        "mask_cpu_s": 0.0632,
+        "sim_cpu_s": 0.0025,
         "cache_hit_rate": 0.4694,
         "trades": 0,
         "digest": "5d89f056865052bc"
@@ -160,10 +160,10 @@
       "replay_warm": {
         "candidates": 4,
         "weeks": 1,
-        "wall_s": 0.0296,
-        "s_per_candidate_week": 0.007396999999855325,
-        "mask_cpu_s": 0.0026,
-        "sim_cpu_s": 0.0268,
+        "wall_s": 0.001,
+        "s_per_candidate_week": 0.00023770000007061753,
+        "mask_cpu_s": 0.0003,
+        "sim_cpu_s": 0.0006,
         "cache_hit_rate": 1.0,
         "trades": 0,
         "digest": "5d89f056865052bc"
@@ -184,10 +184,10 @@
           "cold": {
             "candidates": 4,
             "weeks": 1,
-            "wall_s": 7.5394,
-            "s_per_candidate_week": 1.8848548000000847,
-            "mask_cpu_s": 7.228,
-            "sim_cpu_s": 0.0092,
+            "wall_s": 0.1868,
+            "s_per_candidate_week": 0.04670197499990536,
+            "mask_cpu_s": 0.0363,
+            "sim_cpu_s": 0.0013,
             "cache_hit_rate": 0.4694,
             "trades": 0,
             "digest": "5d89f056865052bc"
@@ -195,21 +195,21 @@
           "warm": {
             "candidates": 4,
             "weeks": 1,
-            "wall_s": 0.03,
-            "s_per_candidate_week": 0.0075034750000213535,
-            "mask_cpu_s": 0.0178,
-            "sim_cpu_s": 0.012,
+            "wall_s": 0.0008,
+            "s_per_candidate_week": 0.0001991500002986868,
+            "mask_cpu_s": 0.0002,
+            "sim_cpu_s": 0.0005,
             "cache_hit_rate": 1.0,
             "trades": 0,
             "digest": "5d89f056865052bc"
           },
-          "s_per_candidate_window_cold": 1.8848548000000847,
-          "s_per_candidate_window_warm": 0.0075034750000213535,
+          "s_per_candidate_window_cold": 0.04670197499990536,
+          "s_per_candidate_window_warm": 0.0001991500002986868,
           "deterministic_cold_vs_warm": true,
           "rss": {
-            "peak_total_mb": 173.9,
-            "baseline_mb": 168.4,
-            "peak_per_worker_mb": 5.5
+            "peak_total_mb": 243.3,
+            "baseline_mb": 236.9,
+            "peak_per_worker_mb": 6.4
           }
         },
         "late": {
@@ -220,10 +220,10 @@
           "cold": {
             "candidates": 4,
             "weeks": 1,
-            "wall_s": 6.079,
-            "s_per_candidate_week": 1.519758550000006,
-            "mask_cpu_s": 5.4346,
-            "sim_cpu_s": 0.0086,
+            "wall_s": 0.6252,
+            "s_per_candidate_week": 0.1562915000004068,
+            "mask_cpu_s": 0.0217,
+            "sim_cpu_s": 0.01,
             "cache_hit_rate": 0.4694,
             "trades": 0,
             "digest": "5d89f056865052bc"
@@ -231,21 +231,21 @@
           "warm": {
             "candidates": 4,
             "weeks": 1,
-            "wall_s": 0.0083,
-            "s_per_candidate_week": 0.002079200000025594,
-            "mask_cpu_s": 0.0003,
-            "sim_cpu_s": 0.0079,
+            "wall_s": 0.0006,
+            "s_per_candidate_week": 0.0001403000001118926,
+            "mask_cpu_s": 0.0001,
+            "sim_cpu_s": 0.0004,
             "cache_hit_rate": 1.0,
             "trades": 0,
             "digest": "5d89f056865052bc"
           },
-          "s_per_candidate_window_cold": 1.519758550000006,
-          "s_per_candidate_window_warm": 0.002079200000025594,
+          "s_per_candidate_window_cold": 0.1562915000004068,
+          "s_per_candidate_window_warm": 0.0001403000001118926,
           "deterministic_cold_vs_warm": true,
           "rss": {
-            "peak_total_mb": 174.5,
-            "baseline_mb": 167.9,
-            "peak_per_worker_mb": 6.6
+            "peak_total_mb": 244.9,
+            "baseline_mb": 238.6,
+            "peak_per_worker_mb": 6.2
           }
         }
       }
@@ -266,7 +266,7 @@
           "chunks_new_per_candidate": 2.0,
           "chunks_reused": 0,
           "reuse_fraction": 0.0,
-          "wall_s": 7.771
+          "wall_s": 0.096
         },
         {
           "cycle": 1,
@@ -278,7 +278,7 @@
           "chunks_new_per_candidate": 1.0,
           "chunks_reused": 4,
           "reuse_fraction": 0.5,
-          "wall_s": 4.054
+          "wall_s": 0.077
         },
         {
           "cycle": 2,
@@ -290,7 +290,7 @@
           "chunks_new_per_candidate": 1.0,
           "chunks_reused": 4,
           "reuse_fraction": 0.5,
-          "wall_s": 4.463
+          "wall_s": 0.063
         }
       ]
     }
@@ -300,12 +300,14 @@
       "n": 12,
       "years": 0.05,
       "window_weeks": 3,
+      "basis": "measured",
+      "pull_hours": null,
       "estimate": {
         "est_disk_bytes": 3356496,
         "est_ram_bytes": 531824000,
         "est_panel_bytes_total": 3203928
       },
-      "build_s": 0.1,
+      "build_s": 0.05,
       "disk_bytes": 1961484,
       "panel_bytes": 1961484,
       "week_chunk_bytes": 490371,
@@ -317,59 +319,60 @@
         "1": {
           "candidates": 4,
           "weeks": 1,
-          "wall_s": 6.0432,
-          "s_per_candidate_week": 1.5107918500000324,
-          "mask_cpu_s": 5.66,
-          "sim_cpu_s": 0.0109,
+          "wall_s": 0.1624,
+          "s_per_candidate_week": 0.040611825000269164,
+          "mask_cpu_s": 0.0293,
+          "sim_cpu_s": 0.0012,
           "cache_hit_rate": 0.4694,
           "trades": 0,
           "digest": "5d89f056865052bc",
           "pool": "serial",
           "rss": {
-            "peak_total_mb": 174.5,
-            "baseline_mb": 168.7,
-            "peak_per_worker_mb": 5.8
+            "peak_total_mb": 243.6,
+            "baseline_mb": 238.3,
+            "peak_per_worker_mb": 5.2
           },
           "est_ram_bytes": 531824000,
-          "s_per_candidate_window": 4.532375550000097
+          "s_per_candidate_window": 0.12183547500080749
         },
         "2": {
           "candidates": 4,
           "weeks": 1,
-          "wall_s": 6.9853,
-          "s_per_candidate_week": 1.74633474999996,
-          "mask_cpu_s": 9.5521,
-          "sim_cpu_s": 0.0119,
-          "cache_hit_rate": 0.3077,
+          "wall_s": 0.0518,
+          "s_per_candidate_week": 0.01294007500018779,
+          "mask_cpu_s": 0.08,
+          "sim_cpu_s": 0.0019,
+          "cache_hit_rate": 0.3474,
           "trades": 0,
           "digest": "5d89f056865052bc",
-          "pool": "process",
+          "pool": "thread",
           "rss": {
-            "peak_total_mb": 387.1,
-            "baseline_mb": 168.4,
-            "peak_per_worker_mb": 109.2
+            "peak_total_mb": 244.2,
+            "baseline_mb": 235.7,
+            "peak_per_worker_mb": 4.3
           },
-          "est_ram_bytes": 1544694000,
-          "s_per_candidate_window": 5.23900424999988
+          "est_ram_bytes": 544694000,
+          "s_per_candidate_window": 0.03882022500056337
         }
       },
       "identical_results_across_threads": true,
-      "best_threads": 1,
+      "best_threads": 2,
       "projection": {
-        "per_candidate_week_s": 1.5107918500000324,
+        "per_candidate_week_s": 0.01294007500018779,
         "window_weeks": 3,
-        "per_candidate_window_s": 4.532375550000097,
+        "per_candidate_window_s": 0.03882022500056337,
+        "result_cache_gb": 0.0,
         "with_cache": {
           "candidate_weeks": 432.0,
-          "full_run_hours_2x_reserve": 0.36,
-          "weekend_job_hours": 0.04,
-          "weekend_vs_24h": 0.0017
+          "full_run_hours_2x_reserve": 0.0,
+          "weekend_job_hours": 0.0,
+          "weekend_vs_24h": 0.0
         },
         "without_cache": {
           "candidate_weeks": 1728,
-          "full_run_hours_2x_reserve": 1.45,
-          "weekend_job_hours": 0.181,
-          "weekend_vs_24h": 0.0076
+          "full_run_hours_2x_reserve": 0.01,
+          "weekend_job_hours": 0.002,
+          "weekend_vs_24h": 0.0001
         },
         "assumptions": {
           "weeks": 4,

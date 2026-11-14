@@ -54,6 +54,7 @@ REFERENCE_EQUITY = 100_000.0
 FIRST_MONDAY = pd.Timestamp("2020-01-06")
 MINUTES_PER_SESSION = 390  # (prefix weeks = ceil(warmup sessions / 5), see ``prefix_weeks``)
 SESSIONS_PER_WEEK = 5
+SESSIONS_PER_YEAR = 252
 
 # Rough byte costs per (symbol x minute) cell, used ONLY to decide whether a cell fits the budget.
 EST_PANEL_B = 21  # 5 float32 fields + bool eligible
@@ -260,6 +261,7 @@ class WeekStore:
         self.keep = keep
         self.lock = threading.Lock()
         self.items: dict[int, tuple[MarketPanel, int, IndicatorCache]] = {}
+        self.prepared: dict[int, Any] = {}  # fast kernel: PreparedPanel per week (shared by all configs/threads)
         self.build_s = 0.0
         self.hits: Counter[str] = Counter()  # from evicted caches
         self.misses: Counter[str] = Counter()
@@ -272,10 +274,22 @@ class WeekStore:
                 self.build_s += time.perf_counter() - t
                 self.items[k] = (panel, warm, IndicatorCache(panel))
                 while len(self.items) > self.keep:
-                    old = self.items.pop(next(iter(self.items)))[2]
+                    k_old = next(iter(self.items))
+                    self.prepared.pop(k_old, None)
+                    old = self.items.pop(k_old)[2]
                     self.hits.update(old.hits)
                     self.misses.update(old.misses)
             return self.items[k]
+
+    def prepared_panel(self, k: int, cfg: AccountConfig) -> Any:
+        """``trade.account_fast.prepare_panel`` once per week chunk (the kernel accepts a PreparedPanel)."""
+        panel = self.get(k)[0]
+        with self.lock:
+            if k not in self.prepared:
+                from shpe_research.trade.account_fast import prepare_panel
+
+                self.prepared[k] = prepare_panel(panel, cfg.ranking, cfg.liquidity_lookback)
+            return self.prepared[k]
 
     def totals(self) -> tuple[int, int]:
         h, m = Counter(self.hits), Counter(self.misses)
@@ -314,9 +328,11 @@ def replay_task(week: int, configs: tuple[Config, ...], ctx: dict[str, Any] | No
         mask = signal_mask(panel, cfg, cache)
         t_mask += time.perf_counter() - t
         t = time.perf_counter()
-        res = c["kernel"].fn(panel, mask, c["cfg"], warmup_sessions=warm)
+        src = store.prepared_panel(week, c["cfg"]) if c["kernel"].name == "fast" else panel
+        res = c["kernel"].fn(src, mask, c["cfg"], warmup_sessions=warm)
         t_sim += time.perf_counter() - t
-        out.append((np.asarray(res.daily_returns, dtype=np.float64), len(res.ledger)))
+        # the fast kernel leaves the ledger empty unless asked; summary["trades"] is the count for both kernels
+        out.append((np.asarray(res.daily_returns, dtype=np.float64), int(res.summary["trades"])))
     return {
         "week": week, "results": out, "mask_s": t_mask, "sim_s": t_sim,
         "hits": sum(cache.hits.values()) - h0, "misses": sum(cache.misses.values()) - m0,
@@ -446,6 +462,8 @@ def project(per_cw_s: float, *, window_weeks: int, params: dict[str, Any]) -> di
     return {
         "per_candidate_week_s": per_cw_s, "window_weeks": W,
         "per_candidate_window_s": per_cw_s * W,
+        # D6 result cache on disk: one float64 daily return per session per (config, chunk) replay
+        "result_cache_gb": round(cached_cw * SESSIONS_PER_WEEK * 8 / 1e9, 4),
         "with_cache": {"candidate_weeks": cached_cw, "full_run_hours_2x_reserve": round(hours(cached_cw), 2),
                        "weekend_job_hours": round(weekend_cached, 3),
                        "weekend_vs_24h": round(weekend_cached / WEEKEND_TARGET_HOURS, 4)},
@@ -568,7 +586,8 @@ def matrix_cell(n: int, years: float, args: argparse.Namespace, kernel: Kernel, 
     n_window = max(round(years * 52), 1)
     pw = prefix_weeks(args.warmup)
     n_weeks_total = n_window + pw
-    cell: dict[str, Any] = {"n": n, "years": years, "window_weeks": n_window}
+    cell: dict[str, Any] = {"n": n, "years": years, "window_weeks": n_window, "basis": "measured"}
+    cell["pull_hours"] = pull_hours(n, years, args.pull_rows_per_s)
     free = shutil.disk_usage(root).free
     # panel disk is shared by all thread counts; gate each thread count on RAM, the cell on disk
     est0 = estimate_cell(n, years, 1, "serial")
@@ -612,6 +631,65 @@ def matrix_cell(n: int, years: float, args: argparse.Namespace, kernel: Kernel, 
     return cell
 
 
+def pull_hours(n: int, years: float, rows_per_s: float | None) -> float | None:
+    """Archive pull time from a MEASURED rows/s rate (none is pulled here); None when no rate is given."""
+    if not rows_per_s:
+        return None
+    return n * years * SESSIONS_PER_YEAR * MINUTES_PER_SESSION / rows_per_s / 3600
+
+
+def fill_projections(matrix: list[dict], args: argparse.Namespace) -> None:
+    """Fill every cell (or thread count) that was skipped by the budget gate from the largest MEASURED cell.
+
+    Replay seconds per candidate-week and RAM per worker scale linearly with N (the panel is the symbol axis);
+    disk and panel bytes scale with N x weeks. Everything filled here is labeled ``projected``.
+    """
+    ref: dict[str, tuple[int, dict]] = {}  # thread count -> (n, stats) from the largest measured N
+    disk_ref: tuple[int, int, int] | None = None  # (n, total weeks incl prefix, disk bytes)
+    for c in matrix:
+        if "skipped" in c:
+            continue
+        pw = prefix_weeks(args.warmup)
+        if disk_ref is None or c["n"] > disk_ref[0]:
+            disk_ref = (c["n"], c["window_weeks"] + pw, c["disk_bytes"])
+        for th, v in c["threads"].items():
+            if "skipped" not in v and (th not in ref or c["n"] > ref[th][0]):
+                ref[th] = (c["n"], v)
+    if disk_ref is None:
+        return
+    pw = prefix_weeks(args.warmup)
+    for c in matrix:
+        n, W = c["n"], c.get("window_weeks") or max(round(c["years"] * 52), 1)
+        whole = "skipped" in c
+        if whole:
+            c["window_weeks"] = W
+            c["basis"] = "projected"
+            per_sym_wk = disk_ref[2] / disk_ref[0] / disk_ref[1]
+            c["disk_bytes"] = c["panel_bytes"] = int(per_sym_wk * n * (W + pw))
+            c["week_chunk_bytes"] = int(per_sym_wk * n)
+            c["threads"] = {}
+        for th in (str(t) for t in args.threads):
+            if th in c["threads"] and "skipped" not in c["threads"][th]:
+                continue
+            if th not in ref:
+                continue
+            rn, rv = ref[th]
+            per_cw = rv["s_per_candidate_week"] * n / rn
+            ram_w = rv["rss"]["peak_per_worker_mb"] * n / rn
+            c["threads"][th] = {
+                "basis": "projected", "pool": rv["pool"], "s_per_candidate_week": per_cw,
+                "s_per_candidate_window": per_cw * W, "rss": {"peak_per_worker_mb": round(ram_w, 1),
+                                                                "peak_total_mb": round(ram_w * int(th), 1)},
+                "from": f"N={rn} measured, linear in N", "gated": c["threads"].get(th, {}).get("skipped")}
+        if "pull_hours" not in c:
+            c["pull_hours"] = pull_hours(n, c["years"], args.pull_rows_per_s)
+        ran = {t: v for t, v in c["threads"].items() if "s_per_candidate_week" in v}
+        if ran and "projection" not in c:
+            best = min(ran, key=lambda t: ran[t]["s_per_candidate_week"])
+            c["best_threads"] = int(best)
+            c["projection"] = project(ran[best]["s_per_candidate_week"], window_weeks=W, params=args.params)
+
+
 # ------------------------------------------------------------------------------------------ report
 
 def _fmt_ms(v: float) -> str:
@@ -653,35 +731,99 @@ def render_markdown(result: dict) -> str:
         L.append("")
     cells = result.get("matrix", [])
     if cells:
-        ths = sorted({int(t) for c in cells for t in c.get("threads", {})})
-        L += ["## Scale matrix (seconds per candidate-window; window = full history, extrapolated from a sample)", "",
-              "| N | years | build s | panel GB | " + " | ".join(f"{t}T s/cw (RAM total/worker MB)" for t in ths)
-              + " | full run h cache / no cache | weekend h cache / no cache |",
-              "|---|---|---|---|" + "---|" * len(ths) + "---|---|"]
-        for c in cells:
-            if "skipped" in c:
-                L.append(f"| {c['n']} | {c['years']} | SKIPPED: {c['skipped']} |" + " |" * (len(ths) + 3))
-                continue
-            cols = []
-            for t in ths:
-                v = c["threads"].get(str(t))
-                if v is None:
-                    cols.append("-")
-                elif "skipped" in v:
-                    cols.append(f"skip: {v['skipped']}")
-                else:
-                    cols.append(f"{v['s_per_candidate_window']:.2f} ({v['rss']['peak_total_mb']}/"
-                                f"{v['rss']['peak_per_worker_mb']}, {v['pool']})")
-            p = c.get("projection")
-            proj = (f"{p['with_cache']['full_run_hours_2x_reserve']} / "
-                    f"{p['without_cache']['full_run_hours_2x_reserve']}"
-                    if p else "-")
-            wk = (f"{p['with_cache']['weekend_job_hours']} / {p['without_cache']['weekend_job_hours']}" if p else "-")
-            L.append(f"| {c['n']} | {c['years']} | {c['build_s']} | {c['panel_bytes'] / 1e9:.2f} | "
-                     + " | ".join(cols) + f" | {proj} | {wk} |")
-        L += ["", f"Projection parameters: `{json.dumps(result['params'])}`; 2x rerun reserve; 24 h weekend target. "
-                  "With cache: first cutoff replays whole windows, later cutoffs one new chunk per carried-over "
-                  "candidate (D6). Rates use the fastest measured thread count per cell.", ""]
+        L += render_matrix(cells, result["params"])
+    return "\n".join(L)
+
+
+def _thread_cols(c: dict, ths: list[int]) -> list[str]:
+    cols = []
+    for t in ths:
+        v = c.get("threads", {}).get(str(t))
+        if v is None:
+            cols.append("-")
+        elif "skipped" in v:
+            cols.append(f"skip: {v['skipped']}")
+        else:
+            tag = "P" if v.get("basis") == "projected" else "M"
+            cols.append(f"{v['s_per_candidate_window']:.2f} s, {v['rss']['peak_total_mb'] / 1e3:.2f} GB total / "
+                        f"{v['rss']['peak_per_worker_mb']:.0f} MB worker [{tag}]")
+    return cols
+
+
+def render_matrix(cells: list[dict], params: dict[str, Any]) -> list[str]:
+    ths = sorted({int(t) for c in cells for t in c.get("threads", {})})
+    L = ["## Scale matrix (M = measured on this machine, P = projected from measured cells, linear in N)", "",
+         "Seconds per candidate-window (window = full history; measured on a sample of weeks and extrapolated). "
+         "RAM is the peak RSS of that run.", "",
+         "| N | years | basis | panel = disk GB | pull h | " + " | ".join(f"{t} thread(s)" for t in ths)
+         + " | full run h cache / no cache | weekend h cache / no cache | D6 result cache GB |",
+         "|---|---|---|---|---|" + "---|" * len(ths) + "---|---|---|"]
+    for c in cells:
+        why = f" (gate: {c['skipped']})" if "skipped" in c else ""
+        if "skipped" in c and "projection" not in c:
+            L.append(f"| {c['n']} | {c['years']} | SKIPPED: {c['skipped']} |" + " |" * (len(ths) + 5))
+            continue
+        p = c.get("projection")
+        proj = (f"{p['with_cache']['full_run_hours_2x_reserve']} / {p['without_cache']['full_run_hours_2x_reserve']}"
+                if p else "-")
+        wk = f"{p['with_cache']['weekend_job_hours']} / {p['without_cache']['weekend_job_hours']}" if p else "-"
+        pull = "n/a" if c.get("pull_hours") is None else f"{c['pull_hours']:.1f}"
+        basis = ("projected" if c.get("basis") == "projected" else "measured") + why
+        L.append(f"| {c['n']} | {c['years']} | {basis} | {c['panel_bytes'] / 1e9:.2f} | {pull} | "
+                 + " | ".join(_thread_cols(c, ths)) + f" | {proj} | {wk} | {p['result_cache_gb'] if p else '-'} |")
+    L += ["", f"Projection parameters: `{json.dumps(params)}`; 2x rerun reserve; 24 h weekend target. "
+              "With cache: first cutoff replays whole windows, later cutoffs one new chunk per carried-over "
+              "candidate (D6). Rates use the fastest thread count per cell.", ""]
+    return L
+
+
+def render_e1_table(result: dict) -> str:
+    """One page for the 0-F decision: time, RAM, disk per N and years, with and without the D6 cache."""
+    pr, meta, s = result["profile"], result["meta"], result["steps"]
+    L = ["# E1 benchmark: time, RAM and disk per universe size and history length", "",
+         "Real account engine (`trade.account_fast` Numba kernel unless noted), real B5 signal masks, A6 panel "
+         "chunks, synthetic prices (no data pulled). Rows marked **measured** ran on this machine; rows marked "
+         "**projected** were extrapolated linearly in N from the largest measured cell because they exceed the "
+         "RAM or disk budget here. Synthetic prices mean trade counts, and so replay time, may differ on real "
+         "data: re-run steps 3-4 with `--panel-dir` once real chunks exist.", "",
+         "## Machine profile", "",
+         f"- {pr['os']}; {pr['cpu']}; {pr['cores_physical']} physical / {pr['cores_logical']} logical cores",
+         f"- RAM {pr['ram_total_gb']} GB ({pr['ram_available_gb']} GB free at start), scratch free {pr['scratch_free_gb']} GB",  # noqa: E501
+         f"- python {pr['python']}, numpy {pr['numpy']}, pandas {pr['pandas']}; kernel `{meta['kernel']}`, "
+         f"pool rule: {meta['pool_rule']}",
+         f"- budgets used for the measured/projected split: RAM {meta['ram_budget_gb']} GB, disk "
+         f"{meta['disk_budget_gb']} GB", "",
+         f"Plan parameters: `{json.dumps(result['params'])}`; time = cutoffs x policies x seeds x budget "
+         "candidate-windows, 2x rerun reserve (cache: first cutoff full, later cutoffs one new chunk for "
+         "carried-over candidates, D6).", "",
+         "| N | years | basis | disk GB (panel) | best threads | RAM total GB / per worker MB | "
+         "full run h, no cache | full run h, D6 cache | weekend job h, no cache | weekend job h, D6 cache | "
+         "D6 result cache GB | pull h |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for c in result.get("matrix", []):
+        p = c.get("projection")
+        if not p:
+            L.append(f"| {c['n']} | {c['years']} | not available: {c.get('skipped', 'no result')} |" + " |" * 9)
+            continue
+        v = c["threads"][str(c["best_threads"])]
+        ram = f"{v['rss']['peak_total_mb'] / 1e3:.2f} / {v['rss']['peak_per_worker_mb']:.0f}"
+        pull = "n/a" if c.get("pull_hours") is None else f"{c['pull_hours']:.1f}"
+        wc, nc = p["with_cache"], p["without_cache"]
+        L.append(f"| {c['n']} | {c['years']} | {c.get('basis', 'measured')} | {c['panel_bytes'] / 1e9:.2f} | "
+                 f"{c['best_threads']} | {ram} | {nc['full_run_hours_2x_reserve']} | "
+                 f"{wc['full_run_hours_2x_reserve']} | {nc['weekend_job_hours']} | {wc['weekend_job_hours']} | "
+                 f"{p['result_cache_gb']} | {pull} |")
+    L += ["", "Method: each measured cell replays a sample of candidates over a few week chunks on the real engine and "
+          "scales to the full window (seconds per candidate-window = seconds per candidate-week x window weeks). "
+          "Thread counts above one are run on a thread pool unless the table says otherwise; the Numba kernel "
+          "releases the GIL but the signal-mask step does not, so thread scaling can be flat or negative.", "",
+          "Disk is the on-disk A6 chunk size (plain npy), which equals the panel's RAM size when fully mapped; "
+          "pull time needs a measured pull rate (`--pull-rows-per-s`) and is n/a otherwise.", ""]
+    if s.get("4"):
+        cyc = s["4"]["cycles"]
+        reuse = ", ".join("{:.0%}".format(x["reuse_fraction"]) for x in cyc[1:])
+        L += [f"Step 4 week-chunk cache: cycle 0 computed {cyc[0]['chunks_new']} (config, chunk) results, later "
+              f"cycles {', '.join(str(x['chunks_new']) for x in cyc[1:])} new; reuse "
+              f"{reuse}.", ""]
     return "\n".join(L)
 
 
@@ -720,11 +862,14 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--step2-weeks", type=int, default=4, help="measured weeks in step 2 (4 = 20 sessions)")
     ap.add_argument("--step1-candidates", type=int, default=8)
     ap.add_argument("--warmup", type=int, default=WARMUP_SESSIONS, help="history-prefix sessions per week chunk")
-    ap.add_argument("--ram-budget-gb", type=float, default=11.0)
-    ap.add_argument("--disk-budget-gb", type=float, default=30.0)
+    ap.add_argument("--ram-budget-gb", type=float, default=12.0)
+    ap.add_argument("--disk-budget-gb", type=float, default=40.0)
     ap.add_argument("--params-json", default=None, help="JSON file or inline JSON overriding projection params")
     ap.add_argument("--panel-dir", type=Path, default=None, help="existing real chunk root for steps 3-4")
+    ap.add_argument("--pull-rows-per-s", type=float, default=None,
+                    help="MEASURED archive pull rate (rows/s) for the pull-time column; nothing is pulled here")
     ap.add_argument("--skip-matrix", action="store_true")
+    ap.add_argument("--skip-steps", action="store_true", help="matrix only (e.g. a process-pool comparison run)")
     ap.add_argument("--keep-panels", action="store_true")
     ap.add_argument("--work-dir", type=Path, default=None, help="scratch for generated panels (default: temp)")
     ap.add_argument("--out", type=Path, default=OUT_DIR)
@@ -752,27 +897,31 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(tmp.name) if tmp else Path(args.work_dir)
     root.mkdir(parents=True, exist_ok=True)
     try:
-        steps: dict[str, Any] = {"1": step1(root, kernel, args.seed, args.warmup, args.step1_candidates),
-                                 "2": step2(root, kernel, args.seed, args.step2_candidates, args.warmup,
-                                            args.step2_weeks)}
-        if args.panel_dir:
-            paths = list_chunks(args.panel_dir)
-            n_sym = read_meta(paths[0])["n_symbols"]
-            source = f"real chunks at {args.panel_dir}"
-        else:
-            n_weeks = prefix_weeks(args.warmup) + 2 * args.window_weeks + max(args.cycles, 1) + args.window_weeks_step4
-            paths, _ = make_panel(root / "calib", args.calib_n, n_weeks, args.seed)
-            n_sym, source = args.calib_n, "synthetic (generate_synthetic_panel)"
-        steps["3"] = step3(paths, kernel, args, n_sym)
-        steps["4"] = step4(paths, kernel, args)
+        steps: dict[str, Any] = {}
+        source = "not run (--skip-steps)"
+        if not args.skip_steps:
+            steps["1"] = step1(root, kernel, args.seed, args.warmup, args.step1_candidates)
+            steps["2"] = step2(root, kernel, args.seed, args.step2_candidates, args.warmup, args.step2_weeks)
+            if args.panel_dir:
+                paths = list_chunks(args.panel_dir)
+                n_sym = read_meta(paths[0])["n_symbols"]
+                source = f"real chunks at {args.panel_dir}"
+            else:
+                n_weeks = (prefix_weeks(args.warmup) + 2 * args.window_weeks + max(args.cycles, 1)
+                           + args.window_weeks_step4)
+                paths, _ = make_panel(root / "calib", args.calib_n, n_weeks, args.seed)
+                n_sym, source = args.calib_n, "synthetic (generate_synthetic_panel)"
+            steps["3"] = step3(paths, kernel, args, n_sym)
+            steps["4"] = step4(paths, kernel, args)
         matrix: list[dict] = []
         if not args.skip_matrix:
             for n in parse_list(args.n_list, int):
                 for years in parse_list(args.years_list, float):
                     matrix.append(matrix_cell(n, years, args, kernel, root))
+            fill_projections(matrix, args)
         result = {
             "meta": {"kernel": kernel.name, "kernel_releases_gil": kernel.releases_gil, "smoke": args.smoke,
-                     "pool_rule": "threads (kernel releases GIL)" if kernel.releases_gil
+                     "pool_rule": "threads (kernel releases GIL; signal masks do not)" if kernel.releases_gil
                      else "processes with panels memmapped read-only (kernel holds the GIL)",
                      "ram_budget_gb": args.ram_budget_gb, "disk_budget_gb": args.disk_budget_gb,
                      "panel_source": source, "total_wall_s": round(time.perf_counter() - t_start, 1)},
@@ -786,6 +935,8 @@ def main(argv: list[str] | None = None) -> int:
     (args.out / f"{stem}.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
     md = render_markdown(result)
     (args.out / f"{stem}.md").write_text(md, encoding="utf-8")
+    if not args.smoke:
+        (args.out / "e1_table.md").write_text(render_e1_table(result), encoding="utf-8")
     print(md)
     return 0
 
