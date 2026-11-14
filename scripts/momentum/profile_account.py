@@ -1,3 +1,4 @@
+# ruff: noqa: B023, E501
 """C5: profile the pure-Python account oracle and time the Numba kernel.
 
     uv run python scripts/momentum/profile_account.py profile --symbols 300
@@ -109,7 +110,6 @@ def cmd_timing(a) -> None:
             base = base or wmed
             print(f"  threads={th:2d}: {len(work)} candidates min {wmin:.3f}s median {wmed:.3f}s "
                   f"-> {wmed / len(work):.4f}s/cand, speedup vs 1 thread {base / wmed:.2f}x")
-        del panel, masks, prep
 
 
 def cmd_jit(a) -> None:
