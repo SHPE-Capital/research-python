@@ -27,11 +27,11 @@ def test_defaults_reproduce_guide():
     assert c.ranking == "dollar_volume_20d" and c.entry_score_threshold is None and c.size_multiplier is None
 
 
-def test_stub_raises():
+def test_simulate_account_delegates_to_engine():
     p = _panel()
     m = SignalMask(np.zeros((2, 4), dtype=bool), np.ones((2, 4), dtype=np.float32))
-    with pytest.raises(NotImplementedError, match="MO-C4"):
-        simulate_account(p, m, AccountConfig())
+    r = simulate_account(p, m, AccountConfig())
+    assert r.daily_returns.tolist() == [0.0, 0.0] and r.ledger == ()
 
 
 def test_panel_validates_shapes_and_ids():
