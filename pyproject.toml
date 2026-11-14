@@ -75,6 +75,7 @@ containers = ["shpe_research"]
 layers = [
     "cli",
     "experiments | (scaffold)",
+    "calibration",
     "pipeline | deploy | testing",
     "strategies | portfolio | analysis",
     "evaluation | models | validation | events | labels",
