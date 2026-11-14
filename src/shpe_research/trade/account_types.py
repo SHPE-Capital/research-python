@@ -148,5 +148,7 @@ class AccountResult:
 
 
 def simulate_account(panel: MarketPanel, mask: SignalMask, cfg: AccountConfig) -> AccountResult:
-    """Run the account over one week. Stub: implemented in MO-C4."""
-    raise NotImplementedError("TODO(MO-C4)")
+    """Run the account over a panel; delegates to ``trade.account.simulate_account`` (MO-C4)."""
+    from shpe_research.trade.account import simulate_account as _simulate  # lazy: account imports this module
+
+    return _simulate(panel, mask, cfg)

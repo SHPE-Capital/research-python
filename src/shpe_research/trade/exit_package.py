@@ -14,6 +14,7 @@ favorable outcome (the stop fill, stop not yet raised) is taken.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -75,7 +76,7 @@ class ExitResult:
 def run_exit(
     open_: np.ndarray, high: np.ndarray, low: np.ndarray, close: np.ndarray, ts_min: np.ndarray,
     entry_idx: int, entry_fill: float, atr: float, close_ts_min: int, early_close: bool = False,
-    costs: CostModel | None = None, **kw: float,
+    costs: CostModel | None = None, **kw: Any,
 ) -> ExitResult:
     """`exit_scan` plus adverse sell-side cost (spread and slippage) on the exit fill."""
     if not (atr > 0):
