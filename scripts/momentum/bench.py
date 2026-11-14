@@ -18,19 +18,28 @@ import platform
 import shutil
 import tempfile
 import time
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import psutil
+import yaml
 
 from shpe_research.data.fixtures import synthetic_bars
+from shpe_research.data.panel import generate_synthetic_panel
 
 OUT_DIR = Path("studies/momentum/rm9-weekly-calibration/bench")
 WEEKEND_TARGET_HOURS = 24.0
 RERUN_RESERVE = 2.0
 SYMBOL_POOL = 300
+PROTOCOL_PATH = Path("configs/strategies/momentum/protocol.yaml")  # 0-G; absent until it lands, see load_protocol
+SESSIONS_PER_YEAR = 252
+MINUTES_PER_SESSION = 390
+MATRIX_N = (300, 500, 1000)
+MATRIX_YEARS = (2, 5, 10)
+MATRIX_THREADS = (1, 8, 16)
 
 
 def machine_profile(scratch: Path | None = None) -> dict:
@@ -275,6 +284,138 @@ def render_markdown(profile: dict, steps: list[StepResult], proj: dict, peak_mb:
     return "\n".join(lines)
 
 
+def load_protocol(path: Path = PROTOCOL_PATH) -> dict | None:
+    """Read N / years / search budget from the 0-G protocol config; None when 0-G has not landed.
+
+    Assumed keys (0-G schema not available here): universe_size, history_years, search_budget (candidates).
+    """
+    if not path.exists():
+        return None
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def dir_bytes(p: Path) -> int:
+    return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+
+
+def measure_build(scratch: Path, n_sym: int, n_sessions: int) -> dict:
+    """Time the A6 synthetic week-chunk build and measure its bytes on disk (the D6 cache's cost and size)."""
+    sessions = pd.bdate_range("2026-03-02", periods=n_sessions)
+    out = scratch / "a6_panel"
+    t = time.perf_counter()
+    generate_synthetic_panel(out, n_sym, sessions)
+    build_s = time.perf_counter() - t
+    units = n_sym * n_sessions
+    return {"symbol_sessions": units, "build_s_per_symbol_session": build_s / units,
+            "panel_bytes_per_symbol_session": dir_bytes(out) / units}
+
+
+def _thread_worker(args: tuple) -> tuple[float, float]:
+    """Replay a slice of the candidate grid in a fresh cache; return (seconds, process peak RSS MB)."""
+    units, grid = args
+    cache = RangeCache()
+    t = time.perf_counter()
+    for g in grid:
+        replay_candidate(units, g, cache)
+    return time.perf_counter() - t, peak_rss_mb()
+
+
+def _noop(_: int) -> int:
+    return 0
+
+
+def measure_threads(units, n_candidates: int, threads: tuple[int, ...]) -> dict[int, dict]:
+    """Wall time and per-worker RSS of the stand-in replay split over spawned workers.
+
+    A worker count is SKIPPED_RAM when workers x measured worker RSS would exceed 80% of available RAM.
+    """
+    grid = candidate_grid(n_candidates)
+    out: dict[int, dict] = {}
+    worker_mb = peak_rss_mb()  # upper bound until a 1-worker run measures the real footprint
+    for w in sorted(threads):
+        if w * worker_mb * 1e6 > 0.8 * psutil.virtual_memory().available:
+            out[w] = {"status": "SKIPPED_RAM"}
+            continue
+        slices = [(units, grid[i::w]) for i in range(w)]
+        with ProcessPoolExecutor(max_workers=w) as ex:
+            list(ex.map(_noop, range(w)))  # start the workers before timing
+            t = time.perf_counter()
+            res = list(ex.map(_thread_worker, slices))
+            wall = time.perf_counter() - t
+        out[w] = {"status": "OK", "wall_s": wall, "worker_peak_rss_mb": max(r[1] for r in res)}
+        worker_mb = out[w]["worker_peak_rss_mb"]
+    base = out.get(1, {}).get("wall_s")
+    for r in out.values():
+        if r["status"] == "OK" and base:
+            r["speedup"] = base / r["wall_s"]
+    return out
+
+
+def scale_matrix(*, ns, years, threads, replay: dict, build: dict, parquet_bytes_per_unit: float,
+                 thread_runs: dict[int, dict], candidates: int, weeks: int, policies: int, seeds: int,
+                 pull_rows_per_s: float | None = None) -> list[dict]:
+    """Project every (N, years, threads) cell from per-symbol-session stand-in costs.
+
+    Without the D6 cache each weekly calibration rebuilds the whole panel and replays cold; with it only the
+    newest week chunk is built and replayed cold, older sessions hit the cache. Linear extrapolation: a floor.
+    """
+    cold = replay["cold_s_per_candidate"] / replay["symbol_sessions"]
+    warm = replay["warm_s_per_candidate"] / replay["symbol_sessions"]
+    reps = weeks * policies * seeds * RERUN_RESERVE
+    rows = []
+    for n in ns:
+        for y in years:
+            units = n * y * SESSIONS_PER_YEAR
+            new_units = n * 5  # one week chunk
+            per_unit_bytes = build["panel_bytes_per_symbol_session"]
+            for t in threads:
+                run = thread_runs.get(t, {})
+                if run.get("status") != "OK" or "speedup" not in run:
+                    rows.append({"n": n, "years": y, "threads": t, "status": run.get("status", "NOT_MEASURED")})
+                    continue
+                sp = run["speedup"]
+                build_s = build["build_s_per_symbol_session"]
+                no_cache = units * build_s + units * candidates * cold / sp
+                cache = new_units * build_s + (units * warm + new_units * (cold - warm)) * candidates / sp
+                worker_mb = run["worker_peak_rss_mb"] + new_units * per_unit_bytes / 1e6  # one week chunk mapped
+                rows.append({
+                    "n": n, "years": y, "threads": t, "status": "OK",
+                    "symbol_sessions": units,
+                    "panel_gb": units * per_unit_bytes / 1e9,
+                    "parquet_gb": units * parquet_bytes_per_unit / 1e9,
+                    "pull_hours": units * MINUTES_PER_SESSION / pull_rows_per_s / 3600 if pull_rows_per_s else None,
+                    "ram_per_worker_mb": worker_mb,
+                    "ram_total_gb": worker_mb * t / 1e3,
+                    "weekly_h_no_cache": no_cache / 3600,
+                    "weekly_h_d6_cache": cache / 3600,
+                    "full_run_h_no_cache": no_cache * reps / 3600,
+                    "full_run_h_d6_cache": cache * reps / 3600,
+                })
+    return rows
+
+
+def render_matrix(rows: list[dict], protocol: dict | None) -> str:
+    src = "protocol config (0-G)" if protocol else "PLACEHOLDERS (0-G protocol config not present)"
+    lines = ["", "## Scale matrix (STAND-IN replay: a FLOOR, not a C4 measurement)", "",
+             f"N / years / search budget source: {src}. Linear extrapolation from per-symbol-session costs of the "
+             "proxy kernel and the A6 synthetic builder; real C4 replay will be slower. Pull time needs "
+             "`--pull-rows-per-s` (no data was pulled); otherwise n/a.", "",
+             "| N | years | threads | panel GB | parquet GB | pull h | RAM/worker MB | RAM total GB | "
+             "weekly h no cache | weekly h D6 | full run h no cache | full run h D6 |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        if r["status"] != "OK":
+            lines.append(f"| {r['n']} | {r['years']} | {r['threads']} | {r['status']} |" + " |" * 8)
+            continue
+        pull = f"{r['pull_hours']:.1f}" if r["pull_hours"] is not None else "n/a"
+        lines.append(f"| {r['n']} | {r['years']} | {r['threads']} | {r['panel_gb']:.1f} | {r['parquet_gb']:.1f} | "
+                     f"{pull} | {r['ram_per_worker_mb']:.0f} | {r['ram_total_gb']:.2f} | "
+                     f"{r['weekly_h_no_cache']:.2f} | {r['weekly_h_d6_cache']:.2f} | "
+                     f"{r['full_run_h_no_cache']:.1f} | {r['full_run_h_d6_cache']:.1f} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or '').splitlines()[0])
     ap.add_argument("--symbols", type=int, default=30)
@@ -284,7 +425,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--policies", type=int, default=3)
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--out", type=Path, default=OUT_DIR)
+    ap.add_argument("--matrix", action="store_true", help="also run the scale matrix and thread sweep")
+    ap.add_argument("--matrix-n", type=int, nargs="+", default=list(MATRIX_N))
+    ap.add_argument("--matrix-years", type=int, nargs="+", default=list(MATRIX_YEARS))
+    ap.add_argument("--matrix-threads", type=int, nargs="+", default=list(MATRIX_THREADS))
+    ap.add_argument("--thread-candidates", type=int, default=1024)
+    ap.add_argument("--pull-rows-per-s", type=float, default=None, help="measured archive pull rate; no pulls here")
+    ap.add_argument("--protocol", type=Path, default=PROTOCOL_PATH)
     args = ap.parse_args(argv)
+    protocol = load_protocol(args.protocol)
+    if protocol:  # 0-G values replace the CLI defaults
+        args.candidates = protocol.get("search_budget", args.candidates)
+        args.matrix_n = [protocol.get("universe_size", n) for n in args.matrix_n[:1]]
+        args.matrix_years = [protocol.get("history_years", y) for y in args.matrix_years[:1]]
 
     with tempfile.TemporaryDirectory(prefix="e1bench_") as tmp:
         scratch = Path(tmp)
@@ -293,11 +446,25 @@ def main(argv: list[str] | None = None) -> int:
     peak = peak_rss_mb()
     proj = project(steps[1], history_sessions=args.history_sessions, candidates=args.candidates,
                    weeks=args.weeks, policies=args.policies, seeds=args.seeds)
+    matrix, md_extra = None, ""
+    if args.matrix:
+        bars = synthetic_bars(symbols=make_symbols(args.symbols), start="2026-03-02", end="2026-03-27")
+        thread_runs = measure_threads(split_sessions(bars), args.thread_candidates, tuple(args.matrix_threads))
+        with tempfile.TemporaryDirectory(prefix="e1matrix_") as tmp:
+            build = measure_build(Path(tmp), 20, 10)
+        d = steps[1].detail
+        rows = scale_matrix(ns=args.matrix_n, years=args.matrix_years, threads=args.matrix_threads, replay=d,
+                            build=build, parquet_bytes_per_unit=d["io"]["parquet_mb"] * 1e6 / d["symbol_sessions"],
+                            thread_runs=thread_runs, candidates=args.candidates, weeks=args.weeks,
+                            policies=args.policies, seeds=args.seeds, pull_rows_per_s=args.pull_rows_per_s)
+        md_extra = render_matrix(rows, protocol) + (
+            "\nMeasured thread sweep (stand-in): `" + json.dumps(thread_runs) + "`\n")
+        matrix = {"rows": rows, "thread_runs": thread_runs, "build": build, "protocol": protocol}
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "bench.json").write_text(
-        json.dumps({"profile": profile, "peak_rss_mb": peak, "steps": [asdict(s) for s in steps], "projection": proj},
-                   indent=2, default=str), encoding="utf-8")
-    md = render_markdown(profile, steps, proj, peak)
+        json.dumps({"profile": profile, "peak_rss_mb": peak, "steps": [asdict(s) for s in steps], "projection": proj,
+                    "matrix": matrix}, indent=2, default=str), encoding="utf-8")
+    md = render_markdown(profile, steps, proj, peak) + md_extra
     (args.out / "bench.md").write_text(md, encoding="utf-8")
     print(md)
     return 0
