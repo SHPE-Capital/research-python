@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from shpe_research.features.momentum.wilder import FLOAT_TOL, _as_float
+from shpe_research.features.momentum.wilder import FLOAT_TOL, _as_float, use_numba
 
 BREAKOUT_N = (10, 20, 40, 60)
 BREAKOUT_B = (0.0, 0.10, 0.25)
@@ -22,6 +22,11 @@ def preceding_high(high: np.ndarray, n: int) -> np.ndarray:
     out = np.full(h.shape, np.nan, dtype=h.dtype)
     n_t = h.shape[1]
     if n_t <= n:
+        return out
+    if use_numba():
+        from shpe_research.features.momentum._kernels import preceding_high_kernel
+
+        preceding_high_kernel(np.ascontiguousarray(h), int(n), out)
         return out
     m = h[:, 0 : n_t - n].copy()
     for k in range(1, n):

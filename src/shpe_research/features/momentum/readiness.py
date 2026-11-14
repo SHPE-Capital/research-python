@@ -73,13 +73,12 @@ def readiness_masks(
     for n in BREAKOUT_N:
         out[f"breakout_n{n}"] = np.isfinite(preceding_high(high, n)) & atr_ok
     slow_ema = {s: ema(close, s) for s in EMA_SLOW}
+    fast_ok = {f: np.isfinite(ema(close, f)) for f in EMA_FAST}  # once per length, not per (fast, slow)
     for s in EMA_SLOW:
         prev = np.full(slow_ema[s].shape, np.nan, dtype=slow_ema[s].dtype)
         prev[:, 5:] = slow_ema[s][:, :-5]
         for f in EMA_FAST:
-            out[f"ema_f{f}_s{s}"] = (
-                np.isfinite(ema(close, f)) & np.isfinite(prev) & atr_ok & (t_idx >= warmup_mult * s)
-            )
+            out[f"ema_f{f}_s{s}"] = fast_ok[f] & np.isfinite(prev) & atr_ok & (t_idx >= warmup_mult * s)
     vw = session_vwap(high, low, close, volume, session_idx)
     out["vwap"] = np.isfinite(vw) & atr_ok
     for w in RVOL_W:

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from shpe_research.features.momentum.wilder import FLOAT_TOL, _as_float
+from shpe_research.features.momentum.wilder import FLOAT_TOL, _as_float, use_numba
 
 VWAP_E = (1.0, 2.0, 3.0)
 
@@ -39,6 +39,15 @@ def session_vwap(
     pv = np.where(good, (h + l + c) / 3.0 * v, 0.0).astype(np.float64)
     vv = np.where(good, v, 0.0).astype(np.float64)
     out = np.full(h.shape, np.nan, dtype=h.dtype)
+    if use_numba():
+        from shpe_research.features.momentum._kernels import segment_cumsum_ratio_kernel
+
+        segs = _segments(session_idx)
+        starts = np.array([a for a, _ in segs], dtype=np.int64)
+        ends = np.array([b for _, b in segs], dtype=np.int64)
+        r = np.full(h.shape, np.nan)
+        segment_cumsum_ratio_kernel(np.ascontiguousarray(pv), np.ascontiguousarray(vv), good, starts, ends, r)
+        return r.astype(h.dtype)
     for a, b in _segments(session_idx):
         cpv = np.cumsum(pv[:, a:b], axis=1)
         cv = np.cumsum(vv[:, a:b], axis=1)

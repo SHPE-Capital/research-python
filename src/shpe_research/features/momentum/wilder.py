@@ -25,12 +25,26 @@ Numba-jitted later.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
+NUMBA_ENV = "SHPE_MOMENTUM_NUMBA"
 FLOAT_TOL = 1e-6
 ATR_LENGTH = 14
 ADX_PERIODS = (7, 14, 21)
 ADX_THRESHOLDS = (15, 20, 25, 30)
+
+
+def use_numba() -> bool:
+    """True when the Numba kernels should run (default). ``SHPE_MOMENTUM_NUMBA=0`` selects the NumPy reference."""
+    if os.environ.get(NUMBA_ENV, "1").strip().lower() in ("0", "false", "off", "no", ""):
+        return False
+    try:
+        import numba  # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 def _as_float(x: np.ndarray) -> np.ndarray:
@@ -48,6 +62,11 @@ def seeded_recursive(x: np.ndarray, n: int, alpha: float) -> np.ndarray:
     x = _as_float(x)
     n_sym, n_t = x.shape
     out = np.full((n_sym, n_t), np.nan, dtype=x.dtype)
+    if use_numba():
+        from shpe_research.features.momentum._kernels import seeded_recursive_kernel
+
+        seeded_recursive_kernel(np.ascontiguousarray(x), int(n), float(alpha), out)
+        return out
     state = np.full(n_sym, np.nan)
     acc = np.zeros(n_sym)
     cnt = np.zeros(n_sym, dtype=np.int64)

@@ -20,7 +20,7 @@ import warnings
 import numpy as np
 
 from shpe_research.features.momentum.vwap_band import _segments
-from shpe_research.features.momentum.wilder import FLOAT_TOL, _as_float
+from shpe_research.features.momentum.wilder import FLOAT_TOL, _as_float, use_numba
 
 RVOL_W = (3, 5, 10)
 RVOL_V = (1.0, 1.5, 2.0)
@@ -63,15 +63,30 @@ def rvol_ratio(
     """Current window sum / median of same window over preceding sessions."""
     sess = np.asarray(session_idx)
     mn = minute_of_session(sess) if minute is None else np.asarray(minute)
-    ws = window_sums(volume, mn, w)
     segs = _segments(sess)
     k = len(segs)
     if k == 0:
-        return ws.astype(_as_float(volume).dtype)
+        return window_sums(volume, mn, w).astype(_as_float(volume).dtype)
     rank = np.zeros(len(sess), dtype=np.int64)
     for i, (a, b) in enumerate(segs):
         rank[a:b] = i
     n_min = int(mn.max()) + 1
+    if use_numba():
+        from shpe_research.features.momentum._kernels import rvol_ratio_kernel
+
+        vol = _as_float(volume)
+        n_t = vol.shape[1]
+        contiguous = np.zeros(n_t, dtype=np.bool_)
+        if n_t >= w:
+            t = np.arange(w - 1, n_t)
+            contiguous[w - 1 :] = (mn[t] >= w - 1) & (mn[t] - mn[t - (w - 1)] == w - 1)
+        out = np.empty(vol.shape, dtype=np.float64)
+        rvol_ratio_kernel(
+            np.ascontiguousarray(vol), int(w), contiguous, rank, mn.astype(np.int64), k, n_min,
+            HISTORY_SESSIONS, MIN_WINDOWS, out,
+        )
+        return out.astype(vol.dtype)
+    ws = window_sums(volume, mn, w)
     grid = np.full((ws.shape[0], k, n_min), np.nan)
     grid[:, rank, mn] = ws
     med = np.full_like(grid, np.nan)
