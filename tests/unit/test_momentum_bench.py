@@ -120,3 +120,63 @@ def test_render_markdown_reports_skips(bench):
     }
     md = bench.render_markdown(result)
     assert "SKIPPED: estimated RAM 99.0 GB" in md
+
+
+def _measured_cell(n, years, per_cw, ram_w, threads=("1", "8")):
+    th = {t: {"pool": "thread", "s_per_candidate_week": per_cw / int(t), "rss": {"peak_per_worker_mb": ram_w,
+                                                                                "peak_total_mb": ram_w * int(t)}}
+          for t in threads}
+    return {"n": n, "years": years, "window_weeks": 52, "disk_bytes": 52 * 1000 * n, "panel_bytes": 52 * 1000 * n,
+            "threads": th, "basis": "measured"}
+
+
+def _args(bench):
+    ns = bench.build_parser().parse_args([])
+    ns.params, ns.threads = dict(bench.DEFAULT_PARAMS), [1, 8]
+    return ns
+
+
+def test_fill_projections_labels_and_scales_linearly(bench):
+    args = _args(bench)
+    pw = bench.prefix_weeks(args.warmup)
+    base = _measured_cell(100, 1, 0.01, 50.0)
+    base["disk_bytes"] = base["panel_bytes"] = (52 + pw) * 1000 * 100
+    big = {"n": 400, "years": 2, "skipped": "estimated RAM 99.0 GB exceeds budget 12.0 GB"}
+    cells = [base, big]
+    bench.fill_projections(cells, args)
+    assert base["basis"] == "measured" and big["basis"] == "projected"
+    assert big["threads"]["1"]["s_per_candidate_week"] == pytest.approx(0.04)
+    assert big["threads"]["8"]["rss"]["peak_per_worker_mb"] == pytest.approx(200.0)
+    assert big["panel_bytes"] == pytest.approx((104 + pw) * 1000 * 400)
+    assert big["best_threads"] == 8
+    assert big["projection"]["with_cache"]["full_run_hours_2x_reserve"] < \
+        big["projection"]["without_cache"]["full_run_hours_2x_reserve"]
+    assert big["pull_hours"] is None
+    args.pull_rows_per_s = 1000.0
+    assert bench.pull_hours(10, 1, 1000.0) == pytest.approx(10 * 252 * 390 / 1000 / 3600)
+
+
+def test_e1_table_has_profile_and_both_bases(bench):
+    args = _args(bench)
+    base = _measured_cell(100, 1, 0.01, 50.0)
+    big = {"n": 400, "years": 2, "skipped": "too big"}
+    cells = [base, big]
+    bench.fill_projections(cells, args)
+    result = {"meta": {"kernel": "fast", "pool_rule": "threads", "ram_budget_gb": 12, "disk_budget_gb": 40},
+              "profile": {"os": "os", "cpu": "cpu", "cores_physical": 8, "cores_logical": 16, "ram_total_gb": 17,
+                          "ram_available_gb": 10, "scratch_free_gb": 70, "python": "3", "numpy": "2", "pandas": "2"},
+              "params": args.params, "steps": {}, "matrix": cells}
+    md = bench.render_e1_table(result)
+    assert "Machine profile" in md and "| measured |" in md and "| projected |" in md
+
+
+def test_fast_kernel_matches_oracle_and_counts_trades(bench, panel_paths):
+    cfgs = bench.sample_configs(4, 2)
+    out = {}
+    for name in ("python", "fast"):
+        with bench.Runner(panel_paths, bench.resolve_kernel(name), 1, "serial", WARMUP) as r:
+            outs, _ = r.run([(2, tuple(cfgs))])
+        out[name] = outs[0]["results"]
+    for (dr_p, n_p), (dr_f, n_f) in zip(out["python"], out["fast"], strict=True):
+        np.testing.assert_allclose(dr_p, dr_f, rtol=0, atol=1e-12)
+        assert n_p == n_f  # fast kernel has no ledger by default; the count comes from summary["trades"]
