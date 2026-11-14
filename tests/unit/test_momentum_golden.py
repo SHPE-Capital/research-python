@@ -29,7 +29,8 @@ def generated(mg):
 
 def test_regeneration_is_byte_identical_to_checked_in_files(generated):
     for rel, text in generated.items():
-        assert (FIX / rel).read_bytes() == text.encode("utf-8"), f"{rel} is stale: run make_golden.py"
+        raw = (FIX / rel).read_bytes().replace(bytes([13, 10]), bytes([10]))  # tolerate autocrlf checkouts
+        assert raw == text.encode("utf-8"), f"{rel} is stale: run make_golden.py"
     on_disk = {p.relative_to(FIX).as_posix() for p in FIX.rglob("*") if p.is_file()}
     assert on_disk == set(generated)
 
