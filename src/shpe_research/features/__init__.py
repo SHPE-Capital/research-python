@@ -8,6 +8,8 @@ from shpe_research.features.base import (
     compute_features,
     register_feature,
 )
+from shpe_research.features.daily.har import HarRv
+from shpe_research.features.daily.returns import Momentum121, PastReturnDays
 from shpe_research.features.microstructure.order_flow import SignedVolumeRatio
 from shpe_research.features.regime.regime import RegimeFeature
 from shpe_research.features.returns.past_return import PastReturn
@@ -20,10 +22,13 @@ from shpe_research.features.volume.vwap_distance import VwapDistance
 __all__ = [
     "FEATURE_REGISTRY",
     "Feature",
+    "HarRv",
     "MinuteOfSession",
+    "Momentum121",
     "OpeningRangeBreakoutDistance",
     "OpeningRangeWidth",
     "PastReturn",
+    "PastReturnDays",
     "RelativeVolume",
     "RealizedVol",
     "RegimeFeature",
