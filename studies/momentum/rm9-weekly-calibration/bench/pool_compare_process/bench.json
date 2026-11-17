@@ -1,0 +1,106 @@
+{
+  "meta": {
+    "kernel": "fast",
+    "kernel_releases_gil": true,
+    "smoke": false,
+    "pool_rule": "threads (kernel releases GIL; signal masks do not)",
+    "ram_budget_gb": 12.0,
+    "disk_budget_gb": 40.0,
+    "panel_source": "not run (--skip-steps)",
+    "total_wall_s": 53.9
+  },
+  "profile": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.4",
+    "numpy": "2.5.4",
+    "pandas": "3.1.0",
+    "cpu": "AMD64 Family 23 Model 113 Stepping 0, AuthenticAMD",
+    "cores_physical": 8,
+    "cores_logical": 16,
+    "ram_total_gb": 17.1,
+    "ram_available_gb": 7.8,
+    "scratch_free_gb": 74.7
+  },
+  "params": {
+    "weeks": 52,
+    "policies": 3,
+    "seeds": 3,
+    "budget": 2048,
+    "carry_over": 0.5,
+    "policies_share_replays": true
+  },
+  "steps": {},
+  "matrix": [
+    {
+      "n": 300,
+      "years": 2.0,
+      "window_weeks": 104,
+      "basis": "measured",
+      "pull_hours": null,
+      "estimate": {
+        "est_disk_bytes": 1289920320,
+        "est_ram_bytes": 1295600000,
+        "est_panel_bytes_total": 1287468000
+      },
+      "build_s": 8.35,
+      "disk_bytes": 1282010377,
+      "panel_bytes": 1282010377,
+      "week_chunk_bytes": 11870466,
+      "sample": {
+        "candidates": 32,
+        "weeks": 4
+      },
+      "threads": {
+        "8": {
+          "candidates": 32,
+          "weeks": 4,
+          "wall_s": 43.0789,
+          "s_per_candidate_week": 0.33655365390623615,
+          "mask_cpu_s": 290.6921,
+          "sim_cpu_s": 10.6652,
+          "cache_hit_rate": 0.4391,
+          "trades": 44588,
+          "digest": "2641a2363f221afc",
+          "pool": "process",
+          "rss": {
+            "peak_total_mb": 8239.1,
+            "baseline_mb": 191.3,
+            "peak_per_worker_mb": 1005.9
+          },
+          "est_ram_bytes": 8969400000,
+          "s_per_candidate_window": 35.00158000624856
+        }
+      },
+      "identical_results_across_threads": true,
+      "best_threads": 8,
+      "projection": {
+        "per_candidate_week_s": 0.33655365390623615,
+        "window_weeks": 104,
+        "per_candidate_window_s": 35.00158000624856,
+        "result_cache_gb": 0.6836,
+        "with_cache": {
+          "candidate_weeks": 17089536.0,
+          "full_run_hours_2x_reserve": 3195.3,
+          "weekend_job_hours": 30.155,
+          "weekend_vs_24h": 1.2565
+        },
+        "without_cache": {
+          "candidate_weeks": 99680256,
+          "full_run_hours_2x_reserve": 18637.64,
+          "weekend_job_hours": 179.208,
+          "weekend_vs_24h": 7.467
+        },
+        "assumptions": {
+          "weeks": 52,
+          "policies": 3,
+          "seeds": 3,
+          "budget": 2048,
+          "carry_over": 0.5,
+          "policies_share_replays": true,
+          "rerun_reserve": 2.0,
+          "weekend_target_hours": 24.0
+        }
+      }
+    }
+  ]
+}
