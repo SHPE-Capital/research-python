@@ -23,14 +23,15 @@ def dataset():
     [
         pytest.param("random_forest", "RandomForestModel", {"n_estimators": 50, "max_depth": 4},
                      id="random_forest"),
-        pytest.param("gradient_boosting", "LightGBMModel", {"n_estimators": 50},
-                     marks=pytest.mark.skip(reason="TODO(M1b)"), id="lightgbm"),
+        pytest.param("gradient_boosting", "LightGBMModel", {"n_estimators": 50}, id="lightgbm"),
         pytest.param("mlp", "MLPModel", {"hidden": [16, 8]}, id="mlp"),
     ],
 )
 def test_m1_models(dataset, tmp_path, module, cls, params):
     import importlib
 
+    if module == "gradient_boosting":
+        pytest.importorskip("lightgbm", reason="needs the optional ml extra: uv sync --extra ml")
     model_cls = getattr(importlib.import_module(f"shpe_research.models.{module}"), cls)
     train = dataset.subset("train")
     model = model_cls(seed=1, **params).fit(train)
