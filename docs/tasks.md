@@ -57,8 +57,8 @@ changes; the spec stays in the stub docstring.
 | [F4](handoff/tasks/F4.md) | Opening-range width and breakout distance | Beg–Int | | `features/session/opening_range.py` | `test_opening_range`, for `range_minutes` 5, 15 and 30 | Done |
 | [F5](handoff/tasks/F5.md) | Regime set: variance ratio, autocorrelation, efficiency ratio | Int | | `features/regime/regime.py` | `test_regime_features` | Done |
 | [F6](handoff/tasks/F6.md) | Order-flow features from tick minute summaries | Int | D3 | `features/microstructure/order_flow.py` | `test_order_flow` | Done |
-| [F7](handoff/tasks/F7-F8.md) | Pair spread z-score, hedge ratio and half-life | Int | C1d, SS2, SS3 | `features/cross_asset/pair_spread.py` | `test_pair_spread` | Open |
-| [F8](handoff/tasks/F7-F8.md) | Market (SPY) return and β at decision time | Int | C1d | `features/cross_asset/market_return.py` | `test_market_return` | Open |
+| [F7](handoff/tasks/F7-F8.md) | Pair spread z-score, hedge ratio and half-life | Int | C1d, SS2, SS3 | `features/cross_asset/pair_spread.py` | `test_pair_spread` | Done |
+| [F8](handoff/tasks/F7-F8.md) | Market (SPY) return and β at decision time | Int | C1d | `features/cross_asset/market_return.py` | `test_market_return` | Done |
 
 Acceptance tests: `tests/todo/test_features_todo.py`.
 
