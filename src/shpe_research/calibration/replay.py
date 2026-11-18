@@ -8,8 +8,9 @@ the account engine. The alias -> mask -> replay logic lives only in the cache, s
 counted once in ``EvalCache.stats``.
 
 The cache context is ``(data_version, universe.version, execution_model, account_hash(account),
-code_version(REPLAY_CODE_MODULES), warmup_sessions)``; ``execution_model`` names both the account
-kernel and the indicator kernel mode (Numba or the NumPy reference), so the modes never share entries.
+code_version(context_code_modules(strategy)), warmup_sessions)``; ``execution_model`` names both the
+account kernel and the indicator kernel mode (Numba or the NumPy reference), so the modes never share
+entries, and a strategy whose signal code lives outside the replay code gets that code in its version.
 """
 
 from __future__ import annotations
@@ -66,6 +67,27 @@ REPLAY_CODE_MODULES: tuple[str, ...] = CODE_MODULES + (
     "shpe_research.calibration.strategies",
     "shpe_research.calibration.cache",
 )
+
+
+def context_code_modules(strategy: StrategySpec | None) -> tuple[str, ...]:
+    """``REPLAY_CODE_MODULES`` plus the strategy's ``signal_modules`` not already covered by them.
+
+    Input: a strategy, or None for the replay code alone. Output: the modules hashed into the cache
+    context's code version. A module is covered when it is listed in ``REPLAY_CODE_MODULES`` or lies
+    inside a listed package, so the breakout strategies keep the plain replay code version (and share
+    paths), while a strategy with its own signal module gets a version that changes when that module's
+    source does. Pure.
+    """
+    if strategy is None:
+        return REPLAY_CODE_MODULES
+    extra = tuple(
+        m
+        for m in strategy.signal_modules
+        if m not in REPLAY_CODE_MODULES and not any(m.startswith(f"{pkg}.") for pkg in REPLAY_CODE_MODULES)
+    )
+    return REPLAY_CODE_MODULES + extra
+
+
 _THREAD_ENV = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS")
 _UNRESOLVED = "unresolved"
 
@@ -365,7 +387,8 @@ class ChunkReplayer:
         Inputs: the archive, the weekly universe schedule, the cache, the data snapshot version,
         ``compute.kernel``, ``cache.warmup_sessions``, ``compute.workers``,
         ``compute.threads_per_worker`` and an optional per-span callback. Computes the replay code
-        version once (a later source edit needs a new replayer).
+        version once, and each strategy's code version once on first use (a later source edit needs
+        a new replayer).
         """
         if kernel not in ("fast", "oracle"):
             raise ValueError(f"unknown kernel {kernel!r}; expected 'fast' or 'oracle'")
@@ -383,15 +406,17 @@ class ChunkReplayer:
         self.counters = ReplayCounters()
         self.by_strategy: dict[str, ReplayCounters] = {}
         self._code_version = code_version(REPLAY_CODE_MODULES)
+        self._code_versions: dict[tuple[str, ...], str] = {REPLAY_CODE_MODULES: self._code_version}
         self._calendar_version = calendar_version()
 
-    def context(self, account: AccountConfig) -> CacheContext:
-        """Return the cache context for replays with ``account``.
+    def context(self, account: AccountConfig, strategy: StrategySpec | None = None) -> CacheContext:
+        """Return the cache context for replays of ``strategy`` with ``account``.
 
-        Input: the exact (strategy-adjusted) account the kernel is called with. Output:
-        ``CacheContext(data_version, universe.version, execution_model, account_hash(account),
-        code_version(REPLAY_CODE_MODULES), warmup_sessions)`` where ``execution_model`` is the account
-        kernel plus the indicator kernel mode read now from ``SHPE_MOMENTUM_NUMBA``. Raises ValueError
+        Inputs: the exact (strategy-adjusted) account the kernel is called with and the strategy (None
+        for the replay code alone). Output: ``CacheContext(data_version, universe.version,
+        execution_model, account_hash(account), code_version(context_code_modules(strategy)),
+        warmup_sessions)`` where ``execution_model`` is the account kernel plus the indicator kernel
+        mode read now from ``SHPE_MOMENTUM_NUMBA``. Raises ValueError
         if ``account.search_replay_reference_equity`` is None: without a fixed reference equity a
         session's return depends on earlier sessions and week chunks cannot be cached.
         """
@@ -399,12 +424,15 @@ class ChunkReplayer:
             raise ValueError(
                 "chunk replays need AccountConfig.search_replay_reference_equity (search.reference_equity)"
             )
+        modules = context_code_modules(strategy)
+        if modules not in self._code_versions:
+            self._code_versions[modules] = code_version(modules)
         return CacheContext(
             data_version=self.data_version,
             universe_version=self.universe.version,
             execution_model=_execution_model(self.kernel),
             account_hash=account_hash(account),
-            code_version=self._code_version,
+            code_version=self._code_versions[modules],
             warmup_sessions=self.warmup_sessions,
         )
 
@@ -444,7 +472,7 @@ class ChunkReplayer:
         requests = list(requests)
         if not requests or not spans:
             raise ValueError("run needs at least one request and one span")
-        contexts = [self.context(r.account) for r in requests]
+        contexts = [self.context(r.account, r.strategy) for r in requests]
         outputs = (
             self._run_parallel(requests, spans, contexts, cutoff)
             if self.workers > 1

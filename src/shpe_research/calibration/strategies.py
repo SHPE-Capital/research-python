@@ -3,16 +3,22 @@
 A ``StrategySpec`` names a strategy family's grid domain, its signal rule and its account
 overrides. The weekly calibration replays every candidate through the same account engine; the
 strategy namespace (``strategy_id/grid_version/config_id``) keys only the cache alias table and the
-audit, while the artifact keeps the 0-B ``config_id``. Task 11 (D9) extends this module with the
-registry built from the protocol's ``search.strategies``.
+audit, while the artifact keeps the 0-B ``config_id``. D9 adds the registry: ``STRATEGY_BASES`` names
+the strategy families, and ``load_strategies`` builds one spec per ``search.strategies`` entry.
+
+A spec's ``signal_modules`` (the signal function's own module plus any ``code_modules``) are hashed
+into its cache context's code version by ``ChunkReplayer.context``, so editing a strategy's signal
+code invalidates its alias rows like editing the breakout signals does.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
+from shpe_research.config.momentum import ResolvedProtocol
 from shpe_research.strategies.momentum.breakout import signals
 from shpe_research.strategies.momentum.breakout.grid import DEFAULT_DOMAIN, Config, GridDomain, config_id
 from shpe_research.strategies.momentum.breakout.indicator_cache import IndicatorCache
@@ -61,6 +67,8 @@ class StrategySpec:
             dotted names such as ``"exit.initial_stop_atr"``.
         budget: Per-strategy search budget, or None for the protocol's.
         seeds: Per-strategy seeds, or None for the protocol's.
+        code_modules: Further dotted modules whose source decides the mask (helpers the signal
+            function calls); ``signal_mask``'s own module is always included (``signal_modules``).
     """
 
     strategy_id: str
@@ -69,6 +77,16 @@ class StrategySpec:
     account_overrides: tuple[tuple[str, OverrideValue], ...] = ()
     budget: int | None = None
     seeds: tuple[int, ...] | None = None
+    code_modules: tuple[str, ...] = ()
+
+    @property
+    def signal_modules(self) -> tuple[str, ...]:
+        """``signal_mask.__module__`` followed by ``code_modules``, deduplicated in order.
+
+        Output: the modules whose source decides this strategy's masks; ``ChunkReplayer.context`` adds
+        those not already in the replay code to the context's code version. Pure.
+        """
+        return tuple(dict.fromkeys((self.signal_mask.__module__, *self.code_modules)))
 
     @property
     def grid_version(self) -> str:
@@ -99,3 +117,34 @@ class StrategySpec:
 
 
 BREAKOUT = StrategySpec("breakout", DEFAULT_DOMAIN, signals.signal_mask)
+
+
+STRATEGY_BASES: Mapping[str, StrategySpec] = MappingProxyType({"breakout": BREAKOUT})
+
+
+def load_strategies(rp: ResolvedProtocol) -> tuple[StrategySpec, ...]:
+    """Build one ``StrategySpec`` per ``search.strategies`` entry, in protocol order.
+
+    Input: the resolved protocol. Output: specs whose ``strategy_id`` is the entry's ``id``, whose
+    domain, signal rule and code modules come from ``STRATEGY_BASES[entry.base]``, whose account
+    overrides are the base's followed by the entry's (sorted by field name), and whose ``budget`` and
+    ``seeds`` are the entry's (else the base's; None means the protocol's). Raises KeyError naming the
+    known bases for an unknown ``base``, ValueError for an unknown ``AccountConfig`` field and
+    TypeError for a value of the wrong type (each override is applied to ``AccountConfig()`` here, so
+    a bad entry fails before any replay). Pure; no timing dependence.
+    """
+    specs = []
+    for entry in rp.protocol.search.strategies:
+        if entry.base not in STRATEGY_BASES:
+            raise KeyError(f"strategy {entry.id!r}: unknown base {entry.base!r}; known bases: {sorted(STRATEGY_BASES)}")
+        base = STRATEGY_BASES[entry.base]
+        spec = dataclasses.replace(
+            base,
+            strategy_id=entry.id,
+            account_overrides=base.account_overrides + tuple(sorted(entry.account_overrides.items())),
+            budget=entry.budget if entry.budget is not None else base.budget,
+            seeds=tuple(entry.seeds) if entry.seeds is not None else base.seeds,
+        )
+        spec.account_config(AccountConfig())
+        specs.append(spec)
+    return tuple(specs)
