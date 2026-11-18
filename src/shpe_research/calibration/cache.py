@@ -14,6 +14,13 @@ same key are harmless, and SQLite's own locking replaces any temp-file plus
 ``os.replace`` scheme (which fails on Windows while another process holds the
 file open). The file must live on a local disk: WAL does not work over network
 file systems.
+
+D6b mask-hash dedup: many configs produce the same signal mask, and the same
+mask with the same account settings gives the same returns. Paths are also
+stored under ``PathKey`` (context, chunk, mask hash; keys prefixed ``"p:"`` in
+the same ``paths`` table), and table ``aliases(ctx, chunk, alias_id,
+mask_hash)`` records which mask each namespaced config id produced on each
+chunk, so ``get_window_dedup`` replays each unique mask once.
 """
 
 from __future__ import annotations
@@ -34,6 +41,8 @@ import numpy as np
 from shpe_research.calibration.acceptance import Entry
 
 _KEY_SCHEMA = "d6.config.v1"
+_PATH_KEY_SCHEMA = "d6b.mask.v1"
+_PATH_KEY_PREFIX = "p:"
 _T = TypeVar("_T")
 _BUSY_CODES = (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
 _RETRY_FIRST_SLEEP_S = 0.005  # mechanism detail, not a protocol tunable: the total wait is busy_timeout_s
@@ -140,6 +149,15 @@ class Chunk:
         return self.sessions[-1]
 
 
+def _chunk_identity(chunk: Chunk) -> dict[str, object]:
+    return {
+        "start": chunk.start.isoformat(),
+        "end": chunk.end.isoformat(),
+        "sessions": [s.isoformat() for s in chunk.sessions],
+        "panel_digest": chunk.panel_digest,
+    }
+
+
 @dataclass(frozen=True)
 class ChunkKey:
     """Cache key of one config's replay over one chunk in one context (weights excluded)."""
@@ -157,15 +175,34 @@ class ChunkKey:
         payload = {
             "schema": _KEY_SCHEMA,
             "context": asdict(self.context),
-            "chunk": {
-                "start": self.chunk.start.isoformat(),
-                "end": self.chunk.end.isoformat(),
-                "sessions": [s.isoformat() for s in self.chunk.sessions],
-                "panel_digest": self.chunk.panel_digest,
-            },
+            "chunk": _chunk_identity(self.chunk),
             "config_id": self.config_id,
         }
         return _sha256_hex(_canonical_json(payload))
+
+
+@dataclass(frozen=True)
+class PathKey:
+    """Cache key of one signal mask's replay over one chunk in one context (D6b; weights excluded)."""
+
+    context: CacheContext
+    chunk: Chunk
+    mask_hash: str
+
+    def digest(self) -> str:
+        """Return the ``paths`` table key: ``"p:"`` plus a 64-hex SHA-256.
+
+        Inputs: context fields, chunk start, end, sessions and panel digest,
+        and ``mask_hash``. Output: a string that never collides with a
+        ``ChunkKey`` digest (those have no prefix). Pure.
+        """
+        payload = {
+            "schema": _PATH_KEY_SCHEMA,
+            "context": asdict(self.context),
+            "chunk": _chunk_identity(self.chunk),
+            "mask_hash": self.mask_hash,
+        }
+        return _PATH_KEY_PREFIX + _sha256_hex(_canonical_json(payload))
 
 
 @dataclass(frozen=True, eq=False)
@@ -302,20 +339,49 @@ class WindowResult:
         )
 
 
+@dataclass(frozen=True)
+class MaskedReplay:
+    """A config's signal-mask identity on one chunk plus the deferred replay of that mask.
+
+    Attributes:
+        mask_hash: ``keys.mask_hash`` of the config's signal on the chunk's panel.
+        replay: Replays the mask over the chunk; called only if no path is
+            stored for ``mask_hash``.
+    """
+
+    mask_hash: str
+    replay: Callable[[], ChunkResult]
+
+
 @dataclass
 class CacheStats:
-    """Per-instance cache counters (process-local; not part of any deterministic output)."""
+    """Per-instance cache counters (process-local; not part of any deterministic output).
+
+    ``hits``/``misses`` count every ``paths`` lookup (``get`` and ``get_path``).
+    ``alias_hits``, ``mask_hits`` and ``replays`` count ``get_window_dedup``
+    chunks resolved by the alias table, by an already stored mask path, or by a
+    replay.
+    """
 
     hits: int = 0
     misses: int = 0
     writes: int = 0
     bytes_written: int = 0
+    alias_hits: int = 0
+    mask_hits: int = 0
+    replays: int = 0
 
     @property
     def hit_rate(self) -> float:
         """``hits / (hits + misses)``, or 0.0 before any lookup."""
         total = self.hits + self.misses
         return self.hits / total if total else 0.0
+
+    @property
+    def dedupe_rate(self) -> float:
+        """``mask_hits / (mask_hits + replays)``: share of mask builds that avoided a replay; 0.0 before any."""
+        total = self.mask_hits + self.replays
+        return self.mask_hits / total if total else 0.0
 
 
 def _check_chunks(chunks: Sequence[Chunk], cutoff: date) -> None:
@@ -388,6 +454,10 @@ class EvalCache:
                 raise RuntimeError(f"could not enable WAL on {self.path} (got {mode!r})")
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("CREATE TABLE IF NOT EXISTS paths (key TEXT PRIMARY KEY, payload BLOB NOT NULL)")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS aliases (ctx TEXT, chunk TEXT, alias_id TEXT, mask_hash TEXT,"
+                " PRIMARY KEY (ctx, chunk, alias_id))"
+            )
         except BaseException:
             conn.close()
             raise
@@ -410,7 +480,9 @@ class EvalCache:
         miss in ``stats``. Timing is the caller's concern: ``get_window`` applies
         the cutoff guard before calling this.
         """
-        digest = key.digest()
+        return self._read_path(key.digest())
+
+    def _read_path(self, digest: str) -> ChunkResult | None:
         row = self._retry_busy(
             lambda: self._connection().execute("SELECT payload FROM paths WHERE key = ?", (digest,)).fetchone()
         )
@@ -427,8 +499,10 @@ class EvalCache:
         only when a row was actually inserted. Safe to call from several
         processes for the same key.
         """
+        self._write_path(key.digest(), result)
+
+    def _write_path(self, digest: str, result: ChunkResult) -> None:
         payload = result.to_bytes()
-        digest = key.digest()
         cur = self._retry_busy(
             lambda: self._connection().execute(
                 "INSERT OR IGNORE INTO paths (key, payload) VALUES (?, ?)", (digest, payload)
@@ -467,6 +541,136 @@ class EvalCache:
                 if result.sessions != chunk.sessions:
                     raise ValueError(f"compute returned sessions that do not match the chunk starting {chunk.start}")
                 self.put(key, result)
+            parts.append(result)
+        return WindowResult.concat(parts)
+
+    def get_path(self, key: PathKey) -> ChunkResult | None:
+        """Look up one mask path.
+
+        Input: the key. Output: the stored result, or None. Counts a hit or a
+        miss in ``stats``. Timing is the caller's concern: ``get_window_dedup``
+        applies the cutoff guard before calling this.
+        """
+        return self._read_path(key.digest())
+
+    def put_path(self, key: PathKey, result: ChunkResult) -> None:
+        """Store one mask path with ``INSERT OR IGNORE`` (idempotent; the first payload wins).
+
+        Inputs: the key and its result. Counts ``writes`` and ``bytes_written``
+        only when a row was actually inserted. Safe across processes.
+        """
+        self._write_path(key.digest(), result)
+
+    def get_alias(self, context: CacheContext, chunk: Chunk, alias_id: str) -> str | None:
+        """Return the mask hash recorded for ``alias_id`` on ``chunk`` in ``context``, or None.
+
+        Inputs: the replay context, the chunk and the namespaced config id.
+        Output: the mask hash string or None. Does not touch ``stats``. Timing
+        is the caller's concern, as for ``get_path``.
+        """
+        ctx, chk = context.digest(), _canonical_json(_chunk_identity(chunk))
+        row = self._retry_busy(
+            lambda: (
+                self._connection()
+                .execute(
+                    "SELECT mask_hash FROM aliases WHERE ctx = ? AND chunk = ? AND alias_id = ?", (ctx, chk, alias_id)
+                )
+                .fetchone()
+            )
+        )
+        return None if row is None else str(row[0])
+
+    def put_alias(self, context: CacheContext, chunk: Chunk, alias_id: str, mask_hash: str) -> None:
+        """Record that ``alias_id`` produced ``mask_hash`` on ``chunk`` in ``context``.
+
+        Inputs: the replay context, the chunk, the namespaced config id and its
+        mask hash. Idempotent for the same mapping and safe across processes.
+        Raises ValueError if the alias is already recorded with a different
+        mask hash: a config's mask is a pure function of the keyed inputs, so a
+        conflict means a key component is missing or an alias id was reused.
+        """
+        ctx, chk = context.digest(), _canonical_json(_chunk_identity(chunk))
+        cur = self._retry_busy(
+            lambda: self._connection().execute(
+                "INSERT OR IGNORE INTO aliases (ctx, chunk, alias_id, mask_hash) VALUES (?, ?, ?, ?)",
+                (ctx, chk, alias_id, mask_hash),
+            )
+        )
+        if cur.rowcount == 1:
+            return
+        existing = self.get_alias(context, chunk, alias_id)
+        if existing != mask_hash:
+            raise ValueError(
+                f"alias {alias_id!r} on chunk starting {chunk.start} already maps to mask {existing}, not {mask_hash}"
+            )
+
+    def alias_rows(self, context: CacheContext) -> list[tuple[date, date, str, str]]:
+        """List every alias recorded in ``context``.
+
+        Input: the replay context. Output: ``(chunk start, chunk end, alias_id,
+        mask_hash)`` tuples, sorted. Reads stored rows only; no timing guard
+        (aliases carry no return data).
+        """
+        ctx = context.digest()
+        rows = self._retry_busy(
+            lambda: (
+                self._connection()
+                .execute("SELECT chunk, alias_id, mask_hash FROM aliases WHERE ctx = ?", (ctx,))
+                .fetchall()
+            )
+        )
+        out: list[tuple[date, date, str, str]] = []
+        for chk, alias_id, mask_hash in rows:
+            ident = json.loads(chk)
+            out.append((date.fromisoformat(ident["start"]), date.fromisoformat(ident["end"]), alias_id, mask_hash))
+        return sorted(out)
+
+    def get_window_dedup(
+        self,
+        context: CacheContext,
+        alias_id: str,
+        chunks: Sequence[Chunk],
+        cutoff: date,
+        mask_for: Callable[[Chunk], MaskedReplay],
+    ) -> WindowResult:
+        """Return a config's return path over ``chunks``, replaying each unique mask once.
+
+        Inputs: the replay context, the namespaced config id (``alias_id``), the
+        window's chunks in order, the decision cutoff session (last completed
+        session) and ``mask_for``, which builds the config's mask on one chunk
+        and returns its hash plus a deferred replay. Output: the concatenated
+        window.
+
+        Timing: before any read, the chunks are validated and LookaheadError is
+        raised if any chunk contains a session after ``cutoff`` (``mask_for`` is
+        not called). Then, per chunk: alias and its path stored -> use it
+        (``alias_hits``); else ``mask_for(chunk)``: a path stored for its mask
+        hash -> use it and record the alias (``mask_hits``); else ``replay()``,
+        check its sessions equal the chunk's (ValueError otherwise), store the
+        path, then the alias (``replays``).
+        """
+        _check_chunks(chunks, cutoff)
+        parts: list[ChunkResult] = []
+        for chunk in chunks:
+            known = self.get_alias(context, chunk, alias_id)
+            if known is not None:
+                result = self.get_path(PathKey(context=context, chunk=chunk, mask_hash=known))
+                if result is not None:
+                    self.stats.alias_hits += 1
+                    parts.append(result)
+                    continue
+            masked = mask_for(chunk)
+            key = PathKey(context=context, chunk=chunk, mask_hash=masked.mask_hash)
+            result = self.get_path(key)
+            if result is not None:
+                self.stats.mask_hits += 1
+            else:
+                result = masked.replay()
+                if result.sessions != chunk.sessions:
+                    raise ValueError(f"replay returned sessions that do not match the chunk starting {chunk.start}")
+                self.put_path(key, result)
+                self.stats.replays += 1
+            self.put_alias(context, chunk, alias_id, masked.mask_hash)
             parts.append(result)
         return WindowResult.concat(parts)
 
