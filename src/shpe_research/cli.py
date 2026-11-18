@@ -332,38 +332,42 @@ def _momentum_cache_path(p) -> Path:
 def _momentum_calibrate(args: argparse.Namespace) -> int:
     from shpe_research.calibration.cache import EvalCache
     from shpe_research.calibration.descriptors import PanelProxyDescriptors
-    from shpe_research.calibration.reserved import ReservedPeriodError
+    from shpe_research.calibration.reserved import ReservedGuard, ReservedPeriodError
     from shpe_research.calibration.universe import StaticUniverseProvider
     from shpe_research.calibration.weekly import (
         CalibrationInputs,
         IncompleteRunError,
         StaleArchiveError,
         calibrate_week,
+        guarded_cutoff,
     )
     from shpe_research.calibration.window import Archive
     from shpe_research.config.momentum import load_protocol
 
     rp = load_protocol(args.protocol, args.set)
     p = rp.protocol
-    archive = Archive.open(args.panel_root)
-    cache = EvalCache(_momentum_cache_path(p), busy_timeout_s=p.cache.busy_timeout_s)
-    inputs = CalibrationInputs(
-        rp=rp,
-        archive=archive,
-        universe=StaticUniverseProvider.from_archive(archive),
-        descriptors=PanelProxyDescriptors(archive, lookback=p.weights.descriptor_lookback),
-        cache=cache,
-        data_version=args.data_version,
-        out_root=args.out,
-        expected_hash=args.protocol_hash,
-    )
+    archive = Archive.open(args.panel_root)  # metadata only
     try:
-        outcome = calibrate_week(inputs, args.cutoff, args.policy)
+        # The guard runs before any bar is read; the descriptors read nothing after the cutoff.
+        cutoff = guarded_cutoff(archive, args.cutoff, ReservedGuard.from_protocol(rp, args.protocol_hash))
+        cache = EvalCache(_momentum_cache_path(p), busy_timeout_s=p.cache.busy_timeout_s)
+        try:
+            inputs = CalibrationInputs(
+                rp=rp,
+                archive=archive,
+                universe=StaticUniverseProvider.from_archive(archive),
+                descriptors=PanelProxyDescriptors(archive, lookback=p.weights.descriptor_lookback, through=cutoff),
+                cache=cache,
+                data_version=args.data_version,
+                out_root=args.out,
+                expected_hash=args.protocol_hash,
+            )
+            outcome = calibrate_week(inputs, args.cutoff, args.policy)
+        finally:
+            cache.close()
     except (IncompleteRunError, ReservedPeriodError, StaleArchiveError) as exc:
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
-    finally:
-        cache.close()
     print(f"{outcome.status}: {outcome.run_dir / 'weekly_config.json'}")
     return 0
 

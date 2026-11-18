@@ -159,6 +159,22 @@ def locked_cutoff(archive: Archive, as_of: date) -> date:
     return cutoff
 
 
+def guarded_cutoff(archive: Archive, as_of: date, guard: ReservedGuard) -> date:
+    """Step 1: lock the cutoff (``locked_cutoff``) and apply the reserved-period guard to it.
+
+    Inputs: the archive, the run date and the guard. Output: the cutoff session, safe to read through.
+    Callers that build readers bounded by the cutoff (``PanelProxyDescriptors(through=...)``) call this
+    first, so nothing on or after ``walkforward.reserved_start`` is read before the guard runs. Logs a
+    WARNING while ``reserved_start`` is unset. Raises StaleArchiveError or ReservedPeriodError. Only
+    archive metadata (session dates) is read.
+    """
+    cutoff = locked_cutoff(archive, as_of)
+    if guard.reserved_start is None:
+        logger.warning("walkforward.reserved_start is unset; the reserved-period guard cannot refuse anything")
+    guard.check_calibration(cutoff)
+    return cutoff
+
+
 def default_replayer(inputs: CalibrationInputs) -> ChunkReplayer:
     """The replayer ``calibrate_week`` uses when none is given (kernel, warm-up and workers from the protocol)."""
     p = inputs.rp.protocol
@@ -210,11 +226,8 @@ class WeeklyCalibration:
         rp = inputs.rp
         p = rp.protocol
         # (1) cutoff and reserved guard
-        cutoff = locked_cutoff(inputs.archive, as_of)
         self.guard = ReservedGuard.from_protocol(rp, inputs.expected_hash)
-        if self.guard.reserved_start is None:
-            logger.warning("walkforward.reserved_start is unset; the reserved-period guard cannot refuse anything")
-        self.guard.check_calibration(cutoff)
+        cutoff = guarded_cutoff(inputs.archive, as_of, self.guard)
         # (2) the activation week's universe
         self.universe_week = inputs.universe.week(iso_monday(activation_sessions(cutoff)[0]))
         # (3) windows

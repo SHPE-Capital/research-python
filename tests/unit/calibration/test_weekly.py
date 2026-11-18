@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import date, timedelta
 from pathlib import Path
@@ -20,8 +21,10 @@ from shpe_research.calibration.weekly import (
     StaleArchiveError,
     WeeklyCalibration,
     calibrate_week,
+    default_replayer,
     drive,
     live_account,
+    locked_cutoff,
     replay_account,
     run_id_for,
 )
@@ -30,10 +33,11 @@ from shpe_research.cli import main
 from shpe_research.config.momentum import ResolvedProtocol, dump_protocol_yaml, load_protocol
 from shpe_research.contracts.weekly_config import DateRange, from_json
 from tests.unit.calibration.conftest import SMALL_PROTOCOL_OVERRIDES
-from tests.unit.calibration.helpers import strip_cache_state
+from tests.unit.calibration.helpers import PlantedEdgeReplayer, every_config, short_breakout, strip_cache_state
 
 AS_OF = date(2024, 5, 31)
-SELECTING_AS_OF = date(2024, 4, 19)  # the only selecting Friday (uniform) of a scan of 2024-03-29 .. 2024-06-28
+PLANTED_GAIN = 0.002  # added to every daily return of the short-breakout configs: they select by design
+PLANTED_LOSS = -0.6  # added on the first validation session: a drawdown above the small protocol's 0.5
 DATA_VERSION = "synth-7"
 LOGICAL = 24 * 2  # small protocol: budget 24 x seeds [1, 2]
 RUN_JSON_KEYS = {
@@ -78,17 +82,33 @@ def _inputs(
     *,
     descriptors=None,
     expected_hash: str | None = None,
+    as_of: date = AS_OF,
 ) -> CalibrationInputs:
+    if descriptors is None:
+        descriptors = _descriptors(archive, rp, as_of)
     return CalibrationInputs(
         rp=rp,
         archive=archive,
         universe=StaticUniverseProvider.from_archive(archive),
-        descriptors=descriptors or PanelProxyDescriptors(archive, lookback=rp.protocol.weights.descriptor_lookback),
+        descriptors=descriptors,
         cache=EvalCache(cache_path, busy_timeout_s=rp.protocol.cache.busy_timeout_s),
         data_version=DATA_VERSION,
         out_root=out_root,
         expected_hash=expected_hash,
     )
+
+
+def _descriptors(archive: Archive, rp: ResolvedProtocol, as_of: date = AS_OF) -> PanelProxyDescriptors:
+    """The proxy descriptors bounded at the cutoff for ``as_of`` (nothing later is read)."""
+    return PanelProxyDescriptors(
+        archive, lookback=rp.protocol.weights.descriptor_lookback, through=locked_cutoff(archive, as_of)
+    )
+
+
+def _planted(inputs: CalibrationInputs, *, loss_on: date | None = None) -> PlantedEdgeReplayer:
+    """The real replayer with a planted gain on short-breakout configs (and optionally a loss on one session)."""
+    gain = PlantedEdgeReplayer(default_replayer(inputs), short_breakout, PLANTED_GAIN)
+    return gain if loss_on is None else PlantedEdgeReplayer(gain, every_config, PLANTED_LOSS, [loss_on])
 
 
 def _plan(archive: Archive, rp: ResolvedProtocol, as_of: date = AS_OF):
@@ -232,22 +252,36 @@ def test_all_infeasible_is_no_deployment(archive, shared_cache, tmp_path) -> Non
 
 
 def test_floor_change_flips_outcome(archive, small_protocol, shared_cache, tmp_path) -> None:
-    base = calibrate_week(_inputs(archive, small_protocol, shared_cache, tmp_path / "a"), SELECTING_AS_OF, "uniform")
+    inputs = _inputs(archive, small_protocol, shared_cache, tmp_path / "a")
+    base = calibrate_week(inputs, AS_OF, "uniform", replayer=_planted(inputs))
     assert base.status == "selected"
-    rp = _protocol("acceptance.validation_min_trades=100000")
-    flipped = calibrate_week(_inputs(archive, rp, shared_cache, tmp_path / "b"), SELECTING_AS_OF, "uniform")
+    assert short_breakout(base.selection.selected.config)
+    assert base.selection.selected.validation.trades >= small_protocol.protocol.acceptance.validation_min_trades
+    rp = _protocol("acceptance.validation_min_trades=100000")  # an override only; same data, same plant
+    inputs = _inputs(archive, rp, shared_cache, tmp_path / "b")
+    flipped = calibrate_week(inputs, AS_OF, "uniform", replayer=_planted(inputs))
     assert flipped.status == "no_deployment"
     assert "validation_min_trades" in flipped.artifact.no_deployment.reason
 
 
 def test_artifact_records_rejections(archive, shared_cache, tmp_path) -> None:
-    rp = _protocol("acceptance.validation_min_trades=100000", "acceptance.max_drawdown=0.0")
-    out = calibrate_week(_inputs(archive, rp, shared_cache, tmp_path), SELECTING_AS_OF, "uniform")
+    rp = _protocol("acceptance.validation_min_trades=100000")
+    inputs = _inputs(archive, rp, shared_cache, tmp_path)
+    loss_day = _plan(archive, rp).validation_sessions[0]
+    out = calibrate_week(inputs, AS_OF, "uniform", replayer=_planted(inputs, loss_on=loss_day))
     assert out.status == "no_deployment"
     fin = _finalists(out.run_dir)
     assert fin["finalists"], "the search should leave feasible finalists"
     failed = {c["name"] for f in fin["finalists"] for c in f["checks"] if not c["passed"]}
     assert {"validation_min_trades", "max_drawdown"} <= failed
+    limit = rp.protocol.acceptance.max_drawdown
+    for f in fin["finalists"]:  # the planted loss fails every finalist's drawdown, traded or not
+        [dd] = [c for c in f["checks"] if c["name"] == "max_drawdown"]
+        assert not dd["passed"] and dd["value"] > limit
+    # Not a vacuous pass: the finalists traded, and the reported (best) finalist did.
+    assert all(f["validation"]["trades"] > 0 for f in fin["finalists"])
+    [trades] = [c for c in out.artifact.acceptance.checks if c.name == "validation_min_trades"]
+    assert trades.value > 0
     for name in failed:
         assert name in out.artifact.no_deployment.reason
     for f in fin["finalists"]:
@@ -283,7 +317,7 @@ class _ConstantDescriptors:
 
 def test_validation_descriptors_never_fit_scaler(archive, small_protocol, shared_cache, tmp_path) -> None:
     rp = small_protocol
-    base = PanelProxyDescriptors(archive, lookback=rp.protocol.weights.descriptor_lookback)
+    base = _descriptors(archive, rp)
     plain = calibrate_week(_inputs(archive, rp, shared_cache, tmp_path / "a", descriptors=base), AS_OF, "similarity")
     scaled_desc = _ScaledValidation(base, _plan(archive, rp).validation_sessions, 100.0)
     scaled = calibrate_week(
@@ -306,14 +340,15 @@ def test_similarity_fallback_recorded(archive, small_protocol, shared_cache, tmp
 
 def test_reserved_guard_in_calibrate(archive, shared_cache, tmp_path) -> None:
     rp = _protocol("walkforward.reserved_start=2024-05-01")
+    blind = _ConstantDescriptors()  # refused runs read no descriptors (the CLI builds them after the guard)
     with pytest.raises(ReservedPeriodError):
-        calibrate_week(_inputs(archive, rp, shared_cache, tmp_path), AS_OF, "uniform")
+        calibrate_week(_inputs(archive, rp, shared_cache, tmp_path, descriptors=blind), AS_OF, "uniform")
     assert not any(tmp_path.iterdir())  # refused before anything was written
     path = tmp_path / "frozen.yaml"
     path.write_text(dump_protocol_yaml(rp.protocol.model_copy(update={"frozen": True})), encoding="utf-8")
     frozen = load_protocol(path)
     with pytest.raises(ReservedPeriodError):  # frozen but no expected hash
-        calibrate_week(_inputs(archive, frozen, shared_cache, tmp_path / "x"), AS_OF, "uniform")
+        calibrate_week(_inputs(archive, frozen, shared_cache, tmp_path / "x", descriptors=blind), AS_OF, "uniform")
     out = calibrate_week(
         _inputs(archive, frozen, shared_cache, tmp_path / "ok", expected_hash=frozen.hash), AS_OF, "uniform"
     )
@@ -325,7 +360,10 @@ def test_stale_archive_is_refused(archive, small_protocol, shared_cache, tmp_pat
     with pytest.raises(StaleArchiveError):
         calibrate_week(_inputs(archive, small_protocol, shared_cache, tmp_path), date(2024, 7, 19), "uniform")
     # A weekend as_of right after the last session is fine (the last session is the latest calendar session).
-    WeeklyCalibration(_inputs(archive, small_protocol, shared_cache, tmp_path), date(2024, 6, 30), "uniform", BREAKOUT)
+    late = date(2024, 6, 30)
+    WeeklyCalibration(_inputs(archive, small_protocol, shared_cache, tmp_path, as_of=late), late, "uniform", BREAKOUT)
+    # Good Friday 2024-03-29 is a holiday: the latest session is Thursday, which the archive holds.
+    assert locked_cutoff(archive, date(2024, 3, 29)) == date(2024, 3, 28)
 
 
 class _FakeClock:
@@ -355,19 +393,49 @@ def test_drive_requires_shared_plan(archive, small_protocol, shared_cache, tmp_p
         drive([a, b], replayer=None)  # type: ignore[arg-type]
 
 
+def _load_run(run_dir: Path) -> tuple[dict, dict, dict]:
+    return (
+        strip_cache_state(_artifact_dict(run_dir)),
+        strip_cache_state({"audit": _audit(run_dir)}),
+        _finalists(run_dir),
+    )
+
+
+def test_joint_drive_equals_each_policy_alone(archive, small_protocol, tmp_path) -> None:
+    policies = ("uniform", "recency", "similarity")
+    joint_inputs = _inputs(archive, small_protocol, tmp_path / "joint.sqlite", tmp_path / "joint")
+    joint = drive(
+        [WeeklyCalibration(joint_inputs, AS_OF, pol, BREAKOUT) for pol in policies], default_replayer(joint_inputs)
+    )
+    assert [o.artifact.policy for o in joint] == list(policies)
+    for pol, together in zip(policies, joint, strict=True):
+        alone_inputs = _inputs(archive, small_protocol, tmp_path / f"{pol}.sqlite", tmp_path / pol)
+        alone = calibrate_week(alone_inputs, AS_OF, pol)
+        assert _load_run(together.run_dir) == _load_run(alone.run_dir), pol
+
+
+def test_drive_refuses_conflicting_accounts(archive, small_protocol, shared_cache, tmp_path) -> None:
+    inputs = _inputs(archive, small_protocol, shared_cache, tmp_path)
+    other = dataclasses.replace(BREAKOUT, account_overrides=(("max_positions", 5),))  # same strategy_id
+    a = WeeklyCalibration(inputs, AS_OF, "uniform", BREAKOUT)
+    b = WeeklyCalibration(inputs, AS_OF, "recency", other)
+    with pytest.raises(ValueError, match="replay account"):
+        drive([a, b], default_replayer(inputs))
+
+
 # ------------------------------------------------------------------------------ CLI
 
 
-def _cli_args(root: Path, out: Path, *extra: str) -> list[str]:
+def _cli_args(root: Path, out: Path, *extra: str, cutoff: str = "2024-05-31", policy: str = "uniform") -> list[str]:
     args = [
         "momentum",
         "calibrate",
         "--panel-root",
         str(root),
         "--cutoff",
-        "2024-05-31",
+        cutoff,
         "--policy",
-        "uniform",
+        policy,
         "--data-version",
         "synth-7",
         "--out",
@@ -394,3 +462,36 @@ def test_cli_calibrate(synth_archive_root, tmp_path, capsys) -> None:
 def test_cli_reserved_exit_code(synth_archive_root, tmp_path, capsys) -> None:
     assert main(_cli_args(synth_archive_root, tmp_path, "walkforward.reserved_start=2024-05-01")) == 2
     assert "reserved" in capsys.readouterr().err.lower()
+
+
+def _record_chunk_reads(monkeypatch) -> list[Path]:
+    """Record every chunk opened by the descriptors and by panel assembly."""
+    import shpe_research.calibration.descriptors as descriptors_mod
+    import shpe_research.calibration.window as window_mod
+
+    opened: list[Path] = []
+    real = window_mod.open_panel_chunk
+
+    def recording(path):
+        opened.append(Path(path))
+        return real(path)
+
+    monkeypatch.setattr(descriptors_mod, "open_panel_chunk", recording)
+    monkeypatch.setattr(window_mod, "open_panel_chunk", recording)
+    return opened
+
+
+def test_cli_reads_nothing_reserved(synth_archive_root, tmp_path, monkeypatch) -> None:
+    from shpe_research.data.panel import read_meta
+
+    opened = _record_chunk_reads(monkeypatch)
+    # Cutoff inside the reserved period, no unlock: refused before any chunk is opened.
+    assert main(_cli_args(synth_archive_root, tmp_path / "a", "walkforward.reserved_start=2024-05-01")) == 2
+    assert opened == []
+    # Cutoff before the reserved period: the run (similarity reads the descriptors) opens no chunk
+    # holding a session after the cutoff, hence none on or after reserved_start.
+    extra = "walkforward.reserved_start=2024-05-06"
+    assert main(_cli_args(synth_archive_root, tmp_path / "b", extra, cutoff="2024-04-26", policy="similarity")) == 0
+    assert opened
+    last = max(date.fromisoformat(d) for path in set(opened) for d in read_meta(path)["sessions"])
+    assert last <= date(2024, 4, 26) < date(2024, 5, 6)

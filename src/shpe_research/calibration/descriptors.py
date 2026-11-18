@@ -64,29 +64,43 @@ class PanelProxyDescriptors:
     TODO(MO-A7): replace with data/market_descriptors.py.
     """
 
-    def __init__(self, archive: Archive, *, lookback: int) -> None:
-        """Read every chunk's daily closes and eligibility once and precompute the descriptors.
+    def __init__(self, archive: Archive, *, lookback: int, through: date) -> None:
+        """Read the daily closes and eligibility up to ``through`` once and precompute the descriptors.
 
-        Inputs: the archive and ``weights.descriptor_lookback`` (>= 2: a sample standard deviation
-        needs two returns). Each precomputed row ``i`` uses archive sessions ``<= i`` only.
+        Inputs: the archive, ``weights.descriptor_lookback`` (>= 2: a sample standard deviation needs
+        two returns) and ``through``, the last archive session the provider may read (a calibration
+        passes its cutoff after the reserved-period guard has accepted it; a walk-forward its last
+        cutoff). Chunks starting after ``through`` are never opened, and in the chunk holding
+        ``through`` only the columns up to its last minute are read (the chunk is memory-mapped and
+        sliced before conversion). Each precomputed row ``i`` uses archive sessions ``<= i`` only.
+        Raises ValueError if ``through`` is not an archive session.
         """
         if lookback < 2:
             raise ValueError("PanelProxyDescriptors needs lookback >= 2 (sample std of the returns)")
         self.archive = archive
         self.lookback = lookback
+        self.through = through
+        self._last = archive.position(through)
         self.version = f"panel-proxy-v1-lookback{lookback}"
         closes, eligible, sessions = [], [], []
         for path in list_chunks(archive.root):
+            chunk_sessions = [date.fromisoformat(s) for s in read_meta(path)["sessions"]]
+            if chunk_sessions[0] > through:
+                break
+            keep = sum(1 for s in chunk_sessions if s <= through)
             panel = open_panel_chunk(path)
             sidx = np.asarray(panel.session_index)
             starts = np.r_[np.flatnonzero(np.r_[True, sidx[1:] != sidx[:-1]]), len(sidx)]
-            close = np.asarray(panel.close, dtype=np.float64)
-            elig = np.asarray(panel.eligible)
-            for a, b in zip(starts[:-1], starts[1:], strict=True):
+            if len(starts) - 1 != len(chunk_sessions):
+                raise ValueError(f"chunk {path.name}: session_index does not match its meta sessions")
+            end = int(starts[keep])
+            close = np.asarray(panel.close[:, :end], dtype=np.float64)
+            elig = np.asarray(panel.eligible[:, :end])
+            for a, b in zip(starts[:keep], starts[1 : keep + 1], strict=True):
                 closes.append(_last_finite(close[:, a:b]))
                 eligible.append(elig[:, a:b].any(axis=1))
-            sessions.extend(date.fromisoformat(s) for s in read_meta(path)["sessions"])
-        if tuple(sessions) != archive.sessions or len(closes) != len(sessions):
+            sessions.extend(chunk_sessions[:keep])
+        if tuple(sessions) != archive.sessions[: self._last + 1] or len(closes) != len(sessions):
             raise ValueError("archive chunks do not match the archive's session index")
         self._table = self._descriptors(np.array(closes).T, np.array(eligible).T, lookback)
 
@@ -118,11 +132,14 @@ class PanelProxyDescriptors:
 
         Input: session dates. Output: ``(n, 3)`` float64; the row for ``s`` is the descriptors at the
         archive session before ``s`` (all-NaN for the first archive session or a short history).
-        Timing: known before ``s`` opens. Raises ValueError for a session not in the archive.
+        Timing: known before ``s`` opens. Raises ValueError for a session not in the archive or whose
+        previous session is after ``through``.
         """
         out = np.full((len(sessions), N_DESCRIPTORS), np.nan)
         for k, s in enumerate(sessions):
             pos = self.archive.position(s) - 1
+            if pos > self._last:
+                raise ValueError(f"descriptor row for {s} needs data after through={self.through}")
             if pos >= 0:
                 out[k] = self._table[pos]
         return out
@@ -131,6 +148,9 @@ class PanelProxyDescriptors:
         """Descriptors through the ``cutoff`` session inclusive.
 
         Input: an archive session (the decision cutoff). Output: ``(3,)`` float64. Timing: known at
-        the cutoff's close. Raises ValueError for a session not in the archive.
+        the cutoff's close. Raises ValueError for a session not in the archive or after ``through``.
         """
-        return self._table[self.archive.position(cutoff)].copy()
+        pos = self.archive.position(cutoff)
+        if pos > self._last:
+            raise ValueError(f"current({cutoff}) needs data after through={self.through}")
+        return self._table[pos].copy()

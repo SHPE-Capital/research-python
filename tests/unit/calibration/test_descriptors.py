@@ -25,7 +25,7 @@ def archive(synth_archive_root: Path) -> Archive:
 
 @pytest.fixture(scope="module")
 def provider(archive: Archive) -> PanelProxyDescriptors:
-    return PanelProxyDescriptors(archive, lookback=LOOKBACK)
+    return PanelProxyDescriptors(archive, lookback=LOOKBACK, through=archive.sessions[-1])
 
 
 def _tampered_archive(src: Path, dst: Path, first: date) -> Archive:
@@ -47,7 +47,8 @@ def _tampered_archive(src: Path, dst: Path, first: date) -> Archive:
 
 def test_rows_use_previous_session_only(archive, provider, synth_archive_root, tmp_path) -> None:
     s = archive.sessions[TAMPER_POS]
-    tampered = PanelProxyDescriptors(_tampered_archive(synth_archive_root, tmp_path / "t", s), lookback=LOOKBACK)
+    tampered_archive = _tampered_archive(synth_archive_root, tmp_path / "t", s)
+    tampered = PanelProxyDescriptors(tampered_archive, lookback=LOOKBACK, through=archive.sessions[-1])
     upto = archive.sessions[LOOKBACK + 1 : TAMPER_POS + 1]  # every finite row through session s
     np.testing.assert_array_equal(provider.rows(upto), tampered.rows(upto))
     nxt = [archive.sessions[TAMPER_POS + 1]]
@@ -60,7 +61,8 @@ def test_current_includes_cutoff(archive, provider, synth_archive_root, tmp_path
     nxt = archive.sessions[TAMPER_POS + 1]
     np.testing.assert_array_equal(provider.current(s), provider.rows([nxt])[0])
     assert provider.current(s).shape == (3,)
-    tampered = PanelProxyDescriptors(_tampered_archive(synth_archive_root, tmp_path / "t", s), lookback=LOOKBACK)
+    tampered_archive = _tampered_archive(synth_archive_root, tmp_path / "t", s)
+    tampered = PanelProxyDescriptors(tampered_archive, lookback=LOOKBACK, through=archive.sessions[-1])
     assert not np.array_equal(provider.current(s), tampered.current(s))
     prev = archive.sessions[TAMPER_POS - 1]
     np.testing.assert_array_equal(provider.current(prev), tampered.current(prev))
@@ -105,3 +107,30 @@ def test_values_match_definition(archive, provider) -> None:
     ok = e[:, pos] & np.all(np.isfinite(win), axis=1)
     d3 = np.mean(c[ok, pos] > win[ok].mean(axis=1))
     np.testing.assert_allclose(provider.current(archive.sessions[pos]), [d1, sd, d3], rtol=1e-12, atol=1e-15)
+
+
+def test_through_bounds_what_is_read(archive, provider, monkeypatch) -> None:
+    """Nothing after ``through`` is opened or answered; rows up to it match the unbounded provider."""
+    import shpe_research.calibration.descriptors as mod
+
+    through = archive.sessions[TAMPER_POS]  # mid-chunk in general: the holding chunk is sliced
+    opened: list[Path] = []
+    real = mod.open_panel_chunk
+
+    def recording(path):
+        opened.append(Path(path))
+        return real(path)
+
+    monkeypatch.setattr(mod, "open_panel_chunk", recording)
+    bounded = PanelProxyDescriptors(archive, lookback=LOOKBACK, through=through)
+    assert opened
+    assert all(date.fromisoformat(read_meta(path)["sessions"][0]) <= through for path in opened)
+    first_after = [p for p in list_chunks(archive.root) if date.fromisoformat(read_meta(p)["sessions"][0]) > through]
+    assert first_after and not set(first_after) & set(opened)
+    upto = archive.sessions[: TAMPER_POS + 2]  # the row for the session after through uses through
+    np.testing.assert_array_equal(bounded.rows(upto), provider.rows(upto))
+    np.testing.assert_array_equal(bounded.current(through), provider.current(through))
+    with pytest.raises(ValueError, match="through"):
+        bounded.current(archive.sessions[TAMPER_POS + 1])
+    with pytest.raises(ValueError, match="through"):
+        bounded.rows([archive.sessions[TAMPER_POS + 2]])
