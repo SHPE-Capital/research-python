@@ -501,14 +501,22 @@ class SearchRun:
         """Record outcomes for exactly the last ``ask`` batch (any order).
 
         Each outcome counts one logical evaluation (cache hits included); outcomes with
-        ``cache_hit`` False also count as actual. Raises ``ValueError`` if the IDs do not match
-        the batch. Timing: outcomes must be search-stage results known at the calibration cutoff.
+        ``cache_hit`` False also count as actual. Scores: a NaN score, or a non-finite score on a
+        feasible outcome, raises ``ValueError``; an infeasible outcome may carry ``-inf`` (invalid
+        accounting), which the audit records as ``score: null`` so every line is strict JSON. The
+        round's surrogate usefulness compares predictions with scores of the feasible outcomes only
+        (ledger ruling P8-2). Raises ``ValueError`` if the IDs do not match the batch; nothing is
+        recorded when a check fails. Timing: outcomes must be search-stage results known at the
+        calibration cutoff.
         """
         if not self._pending:
             raise RuntimeError("tell called without a pending ask")
         ids = [o.config_id for o in outcomes]
         if len(ids) != len(set(ids)) or set(ids) != set(self._pending):
             raise ValueError("outcomes must cover exactly the last ask")
+        for o in outcomes:
+            if math.isnan(o.score) or (o.feasible and not math.isfinite(o.score)):
+                raise ValueError(f"invalid score {o.score!r} for {o.config_id} (feasible={o.feasible})")
         asked_round = self._round - 1
         ordered = sorted(outcomes, key=lambda o: o.config_id)
         for o in ordered:
@@ -516,7 +524,7 @@ class SearchRun:
                 "evaluation",
                 asked_round,
                 config_id=o.config_id,
-                score=float(o.score),
+                score=float(o.score) if math.isfinite(o.score) else None,
                 feasible=bool(o.feasible),
                 reasons=list(o.reasons),
                 cache_hit=bool(o.cache_hit),
@@ -526,8 +534,9 @@ class SearchRun:
             self._actual += not o.cache_hit
             self._results[o.config_id] = (self._pending[o.config_id], o)
         if self._pending_pred is not None:
+            feasible = [o for o in ordered if o.feasible]
             u = rank_usefulness(
-                np.array([self._pending_pred[o.config_id] for o in ordered]), np.array([o.score for o in ordered])
+                np.array([self._pending_pred[o.config_id] for o in feasible]), np.array([o.score for o in feasible])
             )
             self._usefulness.append(u)
             self._log("surrogate", asked_round, n_train=self._n_train, usefulness=None if math.isnan(u) else u)

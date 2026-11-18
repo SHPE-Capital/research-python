@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import itertools
 import json
+import math
 from collections import Counter
 from collections.abc import Callable, Sequence
 
 import numpy as np
+import pytest
 
 from shpe_research.calibration.search import (
     EvalOutcome,
@@ -315,3 +317,50 @@ def test_finds_planted_optimum() -> None:
     res = run_search(DEFAULT_DOMAIN, SearchSection(), SurrogateSection(), 1, PlantedEvaluator())
     assert res.status == "complete"
     assert res.finalists[0].config_id == config_id(planted)
+
+
+def _replace_score(outcomes: list[EvalOutcome], i: int, score: float, feasible: bool) -> list[EvalOutcome]:
+    o = outcomes[i]
+    outcomes[i] = EvalOutcome(o.config_id, score, feasible, () if feasible else ("valid_accounting",), o.cache_hit)
+    return outcomes
+
+
+def test_tell_rejects_nan_and_feasible_infinite_scores() -> None:
+    for score, feasible in ((math.nan, False), (math.nan, True), (math.inf, True), (-math.inf, True)):
+        run = SearchRun(DEFAULT_DOMAIN, SMALL, SMALL_SUR, seed=1)
+        outcomes = _replace_score(LinearEvaluator().evaluate(run.ask()), 0, score, feasible)
+        with pytest.raises(ValueError, match="score"):
+            run.tell(outcomes)
+        assert run.result().logical_evaluations == 0  # rejected before any state change
+
+
+def test_infeasible_minus_inf_is_logged_as_null() -> None:
+    run = SearchRun(DEFAULT_DOMAIN, SMALL, SMALL_SUR, seed=1)
+    outcomes = _replace_score(LinearEvaluator().evaluate(run.ask()), 0, -math.inf, False)
+    run.tell(outcomes)
+    lines = [r.to_json() for r in run.result().audit]
+    assert not any("Infinity" in line or "NaN" in line for line in lines)
+    evals = {d["config_id"]: d for d in _records(run.result(), "evaluation")}
+    assert evals[outcomes[0].config_id]["score"] is None
+    assert all(json.loads(line, parse_constant=_reject_constant) for line in lines)
+
+
+def _reject_constant(name: str) -> float:
+    raise AssertionError(f"non-strict JSON constant {name}")
+
+
+def test_usefulness_ignores_infeasible_outcomes() -> None:
+    run = SearchRun(DEFAULT_DOMAIN, SMALL, SMALL_SUR, seed=4)
+    ev = LinearEvaluator()
+    _run_rounds(run, ev, 1)  # 64 feasible results: the surrogate is used from round 1
+    asked = run.ask()
+    pred = {s["config_id"]: s["pred_mean"] for s in _records(run.result(), "selection", 1)}
+    outcomes = []
+    for k, c in enumerate(sorted(asked, key=lambda c: pred[config_id(c)])):
+        cid = config_id(c)
+        feasible = k % 2 == 0
+        # feasible scores rank exactly like the predictions; infeasible ones in reverse
+        score = pred[cid] if feasible else -1000.0 * pred[cid]
+        outcomes.append(EvalOutcome(cid, score, feasible, () if feasible else ("search_floor",)))
+    run.tell(outcomes)
+    assert run.result().surrogate_usefulness[-1] == pytest.approx(1.0)

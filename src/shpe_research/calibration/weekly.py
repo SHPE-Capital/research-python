@@ -323,8 +323,9 @@ class WeeklyCalibration:
 
         Input: one search-span response per asked config_id. Each window is sliced to the search
         sessions and scored with the search weights (``stage_metrics``); ``search_eligibility`` gives
-        feasibility. A non-finite J (invalid accounting) scores ``-inf``. ``cache_hit`` = no chunk was
-        replayed. Timing: search-window data only (all on or before the cutoff).
+        feasibility. A non-finite J (invalid accounting) scores ``-inf``; such an outcome always fails
+        the ``valid_accounting`` check, so it is infeasible, and ``SearchRun`` audits its score as
+        ``null``. ``cache_hit`` = no chunk was replayed. Timing: search-window data only (all on or before the cutoff).
         """
         if not self._pending:
             raise RuntimeError("tell called without a pending ask")
