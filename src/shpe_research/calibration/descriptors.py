@@ -65,15 +65,17 @@ class PanelProxyDescriptors:
     """
 
     def __init__(self, archive: Archive, *, lookback: int, through: date) -> None:
-        """Read the daily closes and eligibility up to ``through`` once and precompute the descriptors.
+        """Bind the provider; the descriptor table is built lazily on the first ``rows``/``current`` call.
 
         Inputs: the archive, ``weights.descriptor_lookback`` (>= 2: a sample standard deviation needs
         two returns) and ``through``, the last archive session the provider may read (a calibration
         passes its cutoff after the reserved-period guard has accepted it; a walk-forward its last
-        cutoff). Chunks starting after ``through`` are never opened, and in the chunk holding
-        ``through`` only the columns up to its last minute are read (the chunk is memory-mapped and
-        sliced before conversion). Each precomputed row ``i`` uses archive sessions ``<= i`` only.
-        Raises ValueError if ``through`` is not an archive session.
+        cutoff). Construction reads no bar. The first query reads the daily closes and eligibility up
+        to ``through`` once: chunks starting after ``through`` are never opened, and in the chunk
+        holding ``through`` only the columns up to its last minute are read (the chunk is
+        memory-mapped and sliced before conversion). Each precomputed row ``i`` uses archive sessions
+        ``<= i`` only. Raises ValueError here if ``lookback < 2`` or ``through`` is not an archive
+        session.
         """
         if lookback < 2:
             raise ValueError("PanelProxyDescriptors needs lookback >= 2 (sample std of the returns)")
@@ -82,6 +84,18 @@ class PanelProxyDescriptors:
         self.through = through
         self._last = archive.position(through)
         self.version = f"panel-proxy-v1-lookback{lookback}"
+        self._table_cache: np.ndarray | None = None
+
+    @property
+    def _table(self) -> np.ndarray:
+        """The ``(sessions through through, 3)`` descriptor table, built once on first use."""
+        if self._table_cache is None:
+            self._table_cache = self._build_table()
+        return self._table_cache
+
+    def _build_table(self) -> np.ndarray:
+        """Read the daily closes and eligibility up to ``through`` and compute the descriptors."""
+        archive, through = self.archive, self.through
         closes, eligible, sessions = [], [], []
         for path in list_chunks(archive.root):
             chunk_sessions = [date.fromisoformat(s) for s in read_meta(path)["sessions"]]
@@ -102,7 +116,7 @@ class PanelProxyDescriptors:
             sessions.extend(chunk_sessions[:keep])
         if tuple(sessions) != archive.sessions[: self._last + 1] or len(closes) != len(sessions):
             raise ValueError("archive chunks do not match the archive's session index")
-        self._table = self._descriptors(np.array(closes).T, np.array(eligible).T, lookback)
+        return self._descriptors(np.array(closes).T, np.array(eligible).T, self.lookback)
 
     @staticmethod
     def _descriptors(c: np.ndarray, e: np.ndarray, lookback: int) -> np.ndarray:

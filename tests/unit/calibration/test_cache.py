@@ -423,3 +423,21 @@ def test_concat_rejects_unordered_parts():
         WindowResult.concat([pb, pa])
     with pytest.raises(ValueError):
         WindowResult.concat([])
+
+
+def test_inherited_connection_is_parked_not_closed(tmp_path):
+    """After a pid change (fork) the inherited connection is parked, never closed by garbage collection."""
+    import shpe_research.calibration.cache as cache_mod
+
+    cache = EvalCache(tmp_path / "c.sqlite", busy_timeout_s=CacheSection().busy_timeout_s)
+    inherited = cache._connection()
+    cache._pid = -1  # as if this process were a forked child
+    fresh = cache._connection()
+    try:
+        assert fresh is not inherited
+        assert any(c is inherited for c in cache_mod._ABANDONED)
+        assert inherited.execute("SELECT 1").fetchone() == (1,)  # still open
+    finally:
+        cache_mod._ABANDONED[:] = [c for c in cache_mod._ABANDONED if c is not inherited]
+        inherited.close()
+        cache.close()

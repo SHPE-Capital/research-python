@@ -14,6 +14,8 @@ code invalidates its alias rows like editing the breakout signals does.
 from __future__ import annotations
 
 import dataclasses
+import inspect
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -78,6 +80,20 @@ class StrategySpec:
     budget: int | None = None
     seeds: tuple[int, ...] | None = None
     code_modules: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Require ``signal_mask`` to be a module-level function, found by name in its module.
+
+        Spawn workers unpickle it by reference and ``signal_modules`` hashes its module's source, so
+        partials, callable objects, lambdas and closures are refused with TypeError.
+        """
+        fn = self.signal_mask
+        module = sys.modules.get(getattr(fn, "__module__", None) or "")
+        name = getattr(fn, "__name__", None)
+        if not inspect.isfunction(fn) or module is None or name is None or getattr(module, name, None) is not fn:
+            raise TypeError(
+                f"strategy {self.strategy_id!r}: signal_mask must be a module-level function, got {fn!r}"
+            )
 
     @property
     def signal_modules(self) -> tuple[str, ...]:

@@ -12,6 +12,7 @@ from pydantic import BaseModel, ValidationError
 
 from shpe_research.config.momentum import (
     DEFAULT_PROTOCOL_PATH,
+    HASH_EXCLUDED_FIELDS,
     FrozenProtocolError,
     MomentumProtocol,
     dump_protocol_yaml,
@@ -102,11 +103,14 @@ def _replace(model: Any, path: tuple[Any, ...], value: Any) -> Any:
     return model.model_copy(update={head: new})
 
 
-def test_every_field_changes_hash() -> None:
+def test_every_result_field_changes_hash() -> None:
+    """Every field changes the hash except the documented operational ones, which never do."""
     base = MomentumProtocol()
     base_hash = protocol_hash(base)
     leaves = _leaves(base)
     assert len(leaves) >= 45
+    excluded = set(HASH_EXCLUDED_FIELDS)
+    assert excluded <= {".".join(map(str, path)) for path, _ in leaves}
     for path, value in leaves:
         if value is None:
             new = date(2030, 1, 1) if path[-1] == "reserved_start" else "x"
@@ -119,7 +123,10 @@ def test_every_field_changes_hash() -> None:
         else:
             new = _changed(value)
         changed = _replace(base, path, new)
-        assert protocol_hash(changed) != base_hash, path
+        if ".".join(map(str, path)) in excluded:
+            assert protocol_hash(changed) == base_hash, path
+        else:
+            assert protocol_hash(changed) != base_hash, path
 
 
 def test_hash_is_stable() -> None:
@@ -198,3 +205,33 @@ def test_validators() -> None:
         s.model_validate({**s.model_dump(), "seeds": [1, 1]})
     with pytest.raises(ValidationError):
         s.model_validate({**s.model_dump(), "strategies": [{"id": "a"}, {"id": "a"}]})
+
+
+def test_operational_fields_stay_out_of_the_hash() -> None:
+    base = load_protocol(None)
+    assert set(HASH_EXCLUDED_FIELDS) == {
+        "compute.workers",
+        "compute.threads_per_worker",
+        "compute.scratch_dir",
+        "compute.max_wall_hours",
+        "cache.path",
+        "cache.busy_timeout_s",
+    }
+    same = ["compute.workers=8", "compute.max_wall_hours=2.0", "cache.path=/scratch/c.sqlite"]
+    assert load_protocol(None, same).hash == base.hash
+    changed = ("search.budget=4096", "acceptance.max_drawdown=0.2", "weights.uniform_mix=0.3", "compute.kernel=oracle")
+    for item in changed:
+        assert load_protocol(None, [item]).hash != base.hash, item
+
+
+def test_descriptor_lookback_needs_two() -> None:
+    with pytest.raises(ValidationError, match="descriptor_lookback"):
+        load_protocol(None, ["weights.descriptor_lookback=1"])
+    assert load_protocol(None, ["weights.descriptor_lookback=2"]).protocol.weights.descriptor_lookback == 2
+
+
+def test_walkforward_policies_non_empty_and_unique() -> None:
+    with pytest.raises(ValidationError, match="walkforward.policies"):
+        load_protocol(None, ["walkforward.policies=[]"])
+    with pytest.raises(ValidationError, match="walkforward.policies"):
+        load_protocol(None, ["walkforward.policies=[uniform, uniform]"])

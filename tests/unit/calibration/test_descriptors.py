@@ -123,6 +123,8 @@ def test_through_bounds_what_is_read(archive, provider, monkeypatch) -> None:
 
     monkeypatch.setattr(mod, "open_panel_chunk", recording)
     bounded = PanelProxyDescriptors(archive, lookback=LOOKBACK, through=through)
+    assert opened == []  # the table is built lazily, on the first rows() or current() call
+    bounded.current(through)
     assert opened
     assert all(date.fromisoformat(read_meta(path)["sessions"][0]) <= through for path in opened)
     first_after = [p for p in list_chunks(archive.root) if date.fromisoformat(read_meta(p)["sessions"][0]) > through]
@@ -134,3 +136,23 @@ def test_through_bounds_what_is_read(archive, provider, monkeypatch) -> None:
         bounded.current(archive.sessions[TAMPER_POS + 1])
     with pytest.raises(ValueError, match="through"):
         bounded.rows([archive.sessions[TAMPER_POS + 2]])
+
+
+def test_lazy_table_still_validates_through(archive) -> None:
+    with pytest.raises(ValueError):
+        PanelProxyDescriptors(archive, lookback=LOOKBACK, through=date(2024, 1, 6))  # a Saturday
+
+
+def test_tamper_after_through_in_same_chunk_leaves_table_unchanged(archive, synth_archive_root, tmp_path) -> None:
+    # the first position from TAMPER_POS whose next session is in the same week chunk
+    pos = next(i for i in range(TAMPER_POS, len(archive.sessions) - 1) if archive.sessions[i + 1].weekday() > 0)
+    through, after = archive.sessions[pos], archive.sessions[pos + 1]
+    assert after.isocalendar()[:2] == through.isocalendar()[:2]
+    clean = PanelProxyDescriptors(archive, lookback=LOOKBACK, through=through)
+    tampered_archive = _tampered_archive(synth_archive_root, tmp_path / "t", after)
+    tampered = PanelProxyDescriptors(tampered_archive, lookback=LOOKBACK, through=through)
+    upto = archive.sessions[: pos + 2]
+    np.testing.assert_array_equal(tampered.rows(upto), clean.rows(upto))
+    np.testing.assert_array_equal(tampered.current(through), clean.current(through))
+    unbounded = PanelProxyDescriptors(tampered_archive, lookback=LOOKBACK, through=archive.sessions[-1])
+    assert not np.array_equal(unbounded.current(after), clean.current(through))  # the tamper is visible

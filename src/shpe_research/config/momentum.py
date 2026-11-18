@@ -66,7 +66,7 @@ class WeightsSection(_Section):
         _check(0 < lo < hi, "weights.solver_bracket must satisfy 0 < low < high")
         _check(self.solver_max_iter >= 1, "weights.solver_max_iter must be >= 1")
         _check(self.iqr_floor >= 0, "weights.iqr_floor must be >= 0")
-        _check(self.descriptor_lookback >= 1, "weights.descriptor_lookback must be >= 1")
+        _check(self.descriptor_lookback >= 2, "weights.descriptor_lookback must be >= 2 (sample std)")
         return self
 
 
@@ -238,6 +238,10 @@ class WalkforwardSection(_Section):
     @model_validator(mode="after")
     def _validate(self) -> WalkforwardSection:
         _check(self.starting_cash > 0, "walkforward.starting_cash must be > 0")
+        _check(
+            bool(self.policies) and len(set(self.policies)) == len(self.policies),
+            "walkforward.policies must be non-empty and unique",
+        )
         return self
 
 
@@ -263,9 +267,35 @@ class ResolvedProtocol:
     hash: str  # protocol_hash(protocol)
 
 
+# Purely operational fields: they decide where and how fast a run executes, never what it computes,
+# so they stay out of ``protocol_hash`` (ruling: changing them between resume jobs on another host
+# must not orphan a walk-forward out dir or make the frozen unlock hash host-specific). Fields that
+# select an execution model or kernel (``compute.kernel``) or change results (``cache.granularity``,
+# ``cache.warmup_sessions``) stay in the hash. ``compute.max_wall_hours`` only decides when a search
+# stops as ``incomplete_time_limit``, which is never reported as a protocol result.
+HASH_EXCLUDED_FIELDS: tuple[str, ...] = (
+    "compute.workers",
+    "compute.threads_per_worker",
+    "compute.scratch_dir",
+    "compute.max_wall_hours",
+    "cache.path",
+    "cache.busy_timeout_s",
+)
+
+
 def protocol_hash(p: MomentumProtocol) -> str:
-    """64-hex SHA-256 over every field of the protocol (canonical JSON)."""
-    blob = json.dumps(p.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    """Return the protocol's identity: a 64-hex SHA-256 of its canonical JSON.
+
+    Input: a validated protocol. Output: the SHA-256 of the sorted-key, compact JSON of every field
+    except ``HASH_EXCLUDED_FIELDS`` (the operational ones that cannot change a result). It names run
+    ids, checkpoint headers and the reserved-period unlock, so two protocols that compute the same
+    thing hash equally on any host. Pure; no timing dependence.
+    """
+    data = p.model_dump(mode="json")
+    for dotted in HASH_EXCLUDED_FIELDS:
+        section, name = dotted.split(".")
+        data[section].pop(name)
+    blob = json.dumps(data, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 

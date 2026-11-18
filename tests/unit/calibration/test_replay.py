@@ -31,7 +31,7 @@ from shpe_research.calibration.replay import (
     chunk_result,
 )
 from shpe_research.calibration.strategies import BREAKOUT, StrategySpec
-from shpe_research.calibration.window import Archive
+from shpe_research.calibration.window import Archive, iso_monday
 from shpe_research.config.momentum import CacheSection, MomentumProtocol
 from shpe_research.features.momentum.wilder import ATR_LENGTH, NUMBA_ENV
 from shpe_research.strategies.momentum.breakout.grid import DEFAULT_DOMAIN, Config, config_id
@@ -382,3 +382,142 @@ def test_strip_cache_state() -> None:
         "run": {"seed": 1},
     }
     assert artifact["runtime"] == {"wall_s": 3.2}  # input untouched
+
+
+class _CallableMask:
+    def __call__(self, panel, config, cache):
+        return signal_mask(panel, config, cache)
+
+
+def _closure_mask():
+    def inner(panel, config, cache):
+        return signal_mask(panel, config, cache)
+
+    return inner
+
+
+def test_strategy_spec_requires_module_level_function() -> None:
+    import functools
+
+    bad = [
+        functools.partial(signal_mask),
+        _CallableMask(),
+        lambda panel, config, cache: signal_mask(panel, config, cache),
+        _closure_mask(),
+    ]
+    for fn in bad:
+        with pytest.raises(TypeError, match="module-level function"):
+            StrategySpec("x", DEFAULT_DOMAIN, fn)
+    assert StrategySpec("x", DEFAULT_DOMAIN, _fixed_mask).signal_mask is _fixed_mask
+
+
+@pytest.mark.parametrize("kernel", ["oracle", "fast"])
+def test_replayer_matches_direct_simulate_account(archive, all_members_universe, tmp_path, kernel) -> None:
+    """Golden parity: the cached chunk-major window equals direct engine calls on the same panels."""
+    from shpe_research.trade.account import simulate_account
+    from shpe_research.trade.account_fast import prepare_panel, simulate_account_fast
+
+    cfg = CONFIGS[0]
+    acct = _account()
+    spans = _week_spans(archive, 4)
+    rep = _replayer(archive, all_members_universe, tmp_path / "c.sqlite", kernel=kernel)
+    win = rep.run([ReplayRequest(BREAKOUT, cfg, acct)], spans, spans[-1].sessions[-1])[0].window
+    returns, entries, offset = [], [], 0
+    for sp in spans:
+        members = frozenset(a for a, _ in all_members_universe.week(iso_monday(sp.sessions[0])).members)
+        panel, n = archive.build_panel(sp, WARMUP, members)
+        mask = signal_mask(panel, cfg, IndicatorCache(panel))
+        if kernel == "fast":
+            prepared = prepare_panel(panel, acct.ranking, acct.liquidity_lookback)
+            res = simulate_account_fast(prepared, mask, acct, warmup_sessions=n, return_ledger=True)
+        else:
+            res = simulate_account(panel, mask, acct, warmup_sessions=n)
+        returns.append(np.asarray(res.daily_returns, dtype=np.float64))
+        sidx = np.asarray(panel.session_index)
+        local = np.cumsum(np.r_[0, sidx[1:] != sidx[:-1]])
+        entries += [
+            (offset + int(local[r.entry_minute]) - n, r.asset_id, r.exit_reason == "unresolved") for r in res.ledger
+        ]
+        offset += len(sp.sessions)
+    assert np.concatenate(returns).astype("<f8").tobytes() == win.daily_returns.astype("<f8").tobytes()
+    assert entries, "the golden config must trade"
+    assert tuple(sorted(entries)) == tuple(sorted(win.entries))
+
+
+def test_content_digest_memoized_per_process(archive, all_members_universe, tmp_path, monkeypatch) -> None:
+    import shpe_research.calibration.replay as replay_mod
+
+    calls: list[int] = []
+    real = replay_mod.content_digest
+
+    def counting(panel):
+        calls.append(1)
+        return real(panel)
+
+    monkeypatch.setattr(replay_mod, "content_digest", counting)
+    spans = _week_spans(archive, 2)
+    rep = _replayer(archive, all_members_universe, tmp_path / "c.sqlite")
+    first = rep.run(_requests(CONFIGS[:2]), spans, spans[-1].sessions[-1])
+    assert len(calls) == 2
+    again = rep.run(_requests(CONFIGS[2:4]), spans, spans[-1].sessions[-1])
+    assert len(calls) == 2  # same (sessions, warm-up, universe version): no second digest
+    fresh = _replayer(archive, all_members_universe, tmp_path / "c.sqlite").run(
+        _requests(CONFIGS[2:4]), spans, spans[-1].sessions[-1]
+    )
+    assert _all_bytes(again) == _all_bytes(fresh)
+    assert first
+
+
+class _FakeFuture:
+    def __init__(self, fail: bool) -> None:
+        self.fail = fail
+
+    def result(self):
+        if self.fail:
+            raise RuntimeError("worker died")
+        raise AssertionError("not reached")
+
+
+class _FakePool:
+    instances: list[_FakePool] = []
+
+    def __init__(self, max_workers, mp_context) -> None:
+        self.max_workers = max_workers
+        self.shutdowns: list[dict] = []
+        self.submitted = 0
+        _FakePool.instances.append(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.shutdown(wait=True)
+        return False
+
+    def submit(self, *args, **kwargs):
+        self.submitted += 1
+        return _FakeFuture(fail=self.submitted == 1)
+
+    def shutdown(self, wait=True, *, cancel_futures=False):
+        self.shutdowns.append({"wait": wait, "cancel_futures": cancel_futures})
+
+
+def test_parallel_failure_cancels_pending_spans(archive, all_members_universe, tmp_path, monkeypatch) -> None:
+    import shpe_research.calibration.replay as replay_mod
+
+    _FakePool.instances.clear()
+    monkeypatch.setattr(replay_mod, "ProcessPoolExecutor", _FakePool)
+    spans = _week_spans(archive, 3)
+    rep = _replayer(archive, all_members_universe, tmp_path / "c.sqlite", workers=2)
+    with pytest.raises(RuntimeError, match="worker died"):
+        rep.run(_requests(CONFIGS[:1]), spans, spans[-1].sessions[-1])
+    [pool] = _FakePool.instances
+    assert pool.shutdowns[0] == {"wait": True, "cancel_futures": True}
+
+
+def test_pool_size_capped_on_windows() -> None:
+    from shpe_research.calibration.replay import pool_size
+
+    assert pool_size(64, 100, platform="win32") == 61
+    assert pool_size(64, 100, platform="linux") == 64
+    assert pool_size(8, 3, platform="win32") == 3

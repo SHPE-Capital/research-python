@@ -47,6 +47,10 @@ _T = TypeVar("_T")
 _BUSY_CODES = (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
 _RETRY_FIRST_SLEEP_S = 0.005  # mechanism detail, not a protocol tunable: the total wait is busy_timeout_s
 _RETRY_MAX_SLEEP_S = 0.1
+# Connections inherited across a fork. Parked here, never closed or used: dropping the last reference
+# would let CPython close the inherited SQLite handle in the child, which is unsafe for the parent's
+# WAL and locks. They live until the process exits.
+_ABANDONED: list[sqlite3.Connection] = []
 
 
 class LookaheadError(RuntimeError):
@@ -466,7 +470,9 @@ class EvalCache:
     def _connection(self) -> sqlite3.Connection:
         pid = os.getpid()
         if self._conn is not None and self._pid != pid:
-            # Inherited from a parent process (fork): abandon it, never use or close it here.
+            # Inherited from a parent process (fork): park it so it is never used, closed or garbage
+            # collected here (collection would close the parent's handle), then open our own.
+            _ABANDONED.append(self._conn)
             self._conn = None
         if self._conn is None:
             self._conn = self._retry_busy(self._open)

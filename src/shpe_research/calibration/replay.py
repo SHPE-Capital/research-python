@@ -18,6 +18,7 @@ from __future__ import annotations
 import dataclasses
 import multiprocessing
 import os
+import sys
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, fields
@@ -90,6 +91,21 @@ def context_code_modules(strategy: StrategySpec | None) -> tuple[str, ...]:
 
 _THREAD_ENV = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS")
 _UNRESOLVED = "unresolved"
+# ProcessPoolExecutor refuses more than 61 workers on Windows (a WaitForMultipleObjects limit): a
+# platform limit, not a tunable. compute.workers is out of the protocol hash, so capping it changes no
+# result.
+_WINDOWS_MAX_WORKERS = 61
+DigestMemo = dict[tuple[tuple[date, ...], int, str], str]
+
+
+def pool_size(workers: int, n_spans: int, *, platform: str = sys.platform) -> int:
+    """Worker processes for a parallel run: ``min(workers, n_spans)``, capped at 61 on Windows.
+
+    Inputs: ``compute.workers``, the number of spans and the platform name. Output: the pool size.
+    Pure; no timing dependence.
+    """
+    size = min(workers, n_spans)
+    return min(size, _WINDOWS_MAX_WORKERS) if platform == "win32" else size
 
 
 class UniverseLike(Protocol):
@@ -244,6 +260,15 @@ class _Env:
     warmup_sessions: int
     calendar_version: str
     code_version: str
+    digests: DigestMemo
+
+
+def _content_digest(env: _Env, span: ChunkSpan, panel: MarketPanel) -> str:
+    """``content_digest(panel)``, memoized per process by (span sessions, warm-up, universe version)."""
+    key = (span.sessions, env.warmup_sessions, env.universe.version)
+    if key not in env.digests:
+        env.digests[key] = content_digest(panel)
+    return env.digests[key]
 
 
 def _replay_span(
@@ -264,7 +289,7 @@ def _replay_span(
             asset_ids=panel.asset_ids,
             calendar_version=env.calendar_version,
             dtype=panel.close.dtype.name,
-            content=content_digest(panel),
+            content=_content_digest(env, span, panel),
         ),
     )
     atr_key = indicator_key(chunk.panel_digest, env.warmup_sessions, "atr", {"length": ATR_LENGTH}, env.code_version)
@@ -329,16 +354,27 @@ def _worker_env(
     cal_version: str,
     code_ver: str,
 ) -> _Env:
-    """This worker process's own Archive and EvalCache (opened once per process from paths)."""
+    """This worker process's own Archive, EvalCache and content-digest memo (once per process)."""
     key = (archive_root, cache_path)
     if _WORKER.get("key") != key:
         if "cache" in _WORKER:
             _WORKER["cache"].close()
         _WORKER.update(
-            key=key, archive=Archive.open(archive_root), cache=EvalCache(cache_path, busy_timeout_s=busy_timeout_s)
+            key=key,
+            archive=Archive.open(archive_root),
+            cache=EvalCache(cache_path, busy_timeout_s=busy_timeout_s),
+            digests={},
         )
     return _Env(
-        _WORKER["archive"], universe, _WORKER["cache"], data_version, kernel, warmup_sessions, cal_version, code_ver
+        _WORKER["archive"],
+        universe,
+        _WORKER["cache"],
+        data_version,
+        kernel,
+        warmup_sessions,
+        cal_version,
+        code_ver,
+        _WORKER["digests"],
     )
 
 
@@ -388,7 +424,9 @@ class ChunkReplayer:
         ``compute.kernel``, ``cache.warmup_sessions``, ``compute.workers``,
         ``compute.threads_per_worker`` and an optional per-span callback. Computes the replay code
         version once, and each strategy's code version once on first use (a later source edit needs
-        a new replayer).
+        a new replayer). Each span's panel content digest is memoized for the replayer's lifetime,
+        keyed by (span sessions, warm-up, universe version), so an archive edited while the replayer
+        lives is not re-digested.
         """
         if kernel not in ("fast", "oracle"):
             raise ValueError(f"unknown kernel {kernel!r}; expected 'fast' or 'oracle'")
@@ -408,6 +446,7 @@ class ChunkReplayer:
         self._code_version = code_version(REPLAY_CODE_MODULES)
         self._code_versions: dict[tuple[str, ...], str] = {REPLAY_CODE_MODULES: self._code_version}
         self._calendar_version = calendar_version()
+        self._digests: DigestMemo = {}
 
     def context(self, account: AccountConfig, strategy: StrategySpec | None = None) -> CacheContext:
         """Return the cache context for replays of ``strategy`` with ``account``.
@@ -446,6 +485,7 @@ class ChunkReplayer:
             self.warmup_sessions,
             self._calendar_version,
             self._code_version,
+            self._digests,
         )
 
     def run(self, requests: Sequence[ReplayRequest], spans: Sequence[ChunkSpan], cutoff: date) -> list[ReplayResponse]:
@@ -506,15 +546,20 @@ class ChunkReplayer:
         os.environ.update({k: str(self.threads_per_worker) for k in _THREAD_ENV})
         try:
             ctx = multiprocessing.get_context("spawn")
-            with ProcessPoolExecutor(max_workers=min(self.workers, len(spans)), mp_context=ctx) as pool:
+            with ProcessPoolExecutor(max_workers=pool_size(self.workers, len(spans)), mp_context=ctx) as pool:
                 futures = [
                     pool.submit(_worker_span, env_args, expected, sp, requests, contexts, cutoff) for sp in spans
                 ]
                 outputs = []
-                for span, fut in zip(spans, futures, strict=True):
-                    outputs.append(fut.result())
-                    if self.on_span_done is not None:
-                        self.on_span_done(span)
+                try:
+                    for span, fut in zip(spans, futures, strict=True):
+                        outputs.append(fut.result())
+                        if self.on_span_done is not None:
+                            self.on_span_done(span)
+                except BaseException:
+                    # A failed span (or a kill in on_span_done) must not leave the pending spans running.
+                    pool.shutdown(wait=True, cancel_futures=True)
+                    raise
         finally:
             for k, v in saved.items():
                 if v is None:
