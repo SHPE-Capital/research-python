@@ -310,6 +310,83 @@ def _add_data(sub) -> None:
     _add_snapshot(dsub)
 
 
+# ---------------------------------------------------------------- momentum
+
+
+def _date(value: str):
+    from datetime import date
+
+    return date.fromisoformat(value)
+
+
+def _momentum_cache_path(p) -> Path:
+    """``cache.path``, else ``<compute.scratch_dir or runs_dir()/momentum-scratch>/momentum_cache.sqlite``."""
+    from shpe_research.config import runs_dir
+
+    if p.cache.path:
+        return Path(p.cache.path)
+    scratch = Path(p.compute.scratch_dir) if p.compute.scratch_dir else runs_dir() / "momentum-scratch"
+    return scratch / "momentum_cache.sqlite"
+
+
+def _momentum_calibrate(args: argparse.Namespace) -> int:
+    from shpe_research.calibration.cache import EvalCache
+    from shpe_research.calibration.descriptors import PanelProxyDescriptors
+    from shpe_research.calibration.reserved import ReservedPeriodError
+    from shpe_research.calibration.universe import StaticUniverseProvider
+    from shpe_research.calibration.weekly import (
+        CalibrationInputs,
+        IncompleteRunError,
+        StaleArchiveError,
+        calibrate_week,
+    )
+    from shpe_research.calibration.window import Archive
+    from shpe_research.config.momentum import load_protocol
+
+    rp = load_protocol(args.protocol, args.set)
+    p = rp.protocol
+    archive = Archive.open(args.panel_root)
+    cache = EvalCache(_momentum_cache_path(p), busy_timeout_s=p.cache.busy_timeout_s)
+    inputs = CalibrationInputs(
+        rp=rp,
+        archive=archive,
+        universe=StaticUniverseProvider.from_archive(archive),
+        descriptors=PanelProxyDescriptors(archive, lookback=p.weights.descriptor_lookback),
+        cache=cache,
+        data_version=args.data_version,
+        out_root=args.out,
+        expected_hash=args.protocol_hash,
+    )
+    try:
+        outcome = calibrate_week(inputs, args.cutoff, args.policy)
+    except (IncompleteRunError, ReservedPeriodError, StaleArchiveError) as exc:
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        cache.close()
+    print(f"{outcome.status}: {outcome.run_dir / 'weekly_config.json'}")
+    return 0
+
+
+def _add_momentum(sub) -> None:
+    from shpe_research.config import runs_dir
+    from shpe_research.config.momentum import DEFAULT_PROTOCOL_PATH
+
+    group = sub.add_parser("momentum", help="momentum weekly calibration (stream D)")
+    msub = group.add_subparsers(dest="momentum_command", metavar="<momentum command>", required=True)
+
+    p = msub.add_parser("calibrate", help="calibrate one weekend: one cutoff -> one 0-A weekly config (D7)")
+    p.add_argument("--panel-root", type=Path, required=True, help="A6 week-chunk archive directory")
+    p.add_argument("--cutoff", type=_date, required=True, help="as-of date YYYY-MM-DD (last session on or before)")
+    p.add_argument("--policy", required=True, choices=["uniform", "recency", "similarity"])
+    p.add_argument("--data-version", required=True, help="identity of the data snapshot (cache key, artifact)")
+    p.add_argument("--protocol", type=Path, default=DEFAULT_PROTOCOL_PATH, help="0-G protocol YAML")
+    p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="protocol override (repeatable)")
+    p.add_argument("--out", type=Path, default=runs_dir() / "momentum" / "calibrate", help="run directories root")
+    p.add_argument("--protocol-hash", default=None, metavar="HEX", help="unlocks the reserved period if frozen")
+    p.set_defaults(handler=_momentum_calibrate)
+
+
 # ---------------------------------------------------------------- main
 
 
@@ -341,6 +418,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_sweep(sub)
     _add_fixtures(sub)
     _add_data(sub)
+    _add_momentum(sub)
     from shpe_research.scaffold.new import _add_new
 
     _add_new(sub)
