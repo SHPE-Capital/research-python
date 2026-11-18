@@ -74,7 +74,8 @@ class UniverseConfig:
 
 
 def load_candidates(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path, comment="#")
+    # keep_default_na=False: tickers such as NA (Nano Labs) must not be read as missing values.
+    df = pd.read_csv(path, comment="#", keep_default_na=False, na_values=[""])
     df["symbol"] = df["symbol"].str.strip().str.upper()
     return df.drop_duplicates("symbol").reset_index(drop=True)
 
