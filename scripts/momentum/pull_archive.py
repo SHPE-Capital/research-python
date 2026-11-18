@@ -6,7 +6,8 @@
         --start 2024-03-04 --end 2024-03-05 --dry-run        # tiny dry run, writes under <root>/dryrun
 
 Stages (pool size x years): pilot (fixed ~77 names x 2 years), 300x2, 500x5, 1000x10. Only `pilot` has a built-in
-pool; larger stages need --symbols-file (one ticker per line). Only `pilot` is meant to be run for now.
+pool; larger stages need --symbols-file (one ticker per line, `#` comments allowed). Until A4/A5 exist, the file
+comes from scripts/momentum/build_interim_universe.py.
 
 Why not data/store.py's JSON manifest: it rewrites the whole file every 20 units. Here every finished unit is one
 SQLite row (WAL, committed immediately), so cost per unit stays constant at ~240,000 units. Unit files use the
@@ -472,6 +473,12 @@ def _setup_logging(root: Path, stage: str) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+def read_symbols_file(path: Path) -> list[str]:
+    """One ticker per line; blank lines and `#` comment lines are ignored."""
+    lines = (ln.strip() for ln in path.read_text().splitlines())
+    return sorted({ln.upper() for ln in lines if ln and not ln.startswith("#")})
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--stage", choices=sorted(STAGES), default="pilot")
@@ -492,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.symbols:
         symbols = sorted({s.strip().upper() for s in args.symbols.split(",") if s.strip()})
     elif args.symbols_file:
-        symbols = sorted({ln.strip().upper() for ln in args.symbols_file.read_text().splitlines() if ln.strip()})
+        symbols = read_symbols_file(args.symbols_file)
     elif spec.symbols is None:
         symbols = pilot_pool()
     else:

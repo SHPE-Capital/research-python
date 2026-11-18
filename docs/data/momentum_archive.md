@@ -36,6 +36,34 @@ About 58 liquid US common stocks, SPY (descriptor only), and 16 delisted or rena
 (delisted or renamed inside the window), and ATVI, SIVB, TWTR (delisted before the window, to test how far back
 Alpaca keeps minute bars). The pool is the full list in `pull_archive.py`.
 
+## Interim symbol list for 300x2 and 500x5
+
+Until A4 (weekly eligibility) and A5 (weekly 3x3 schedule) exist, `--symbols-file` comes from
+`scripts/momentum/build_interim_universe.py` with `configs/universe/momentum_interim_v0.yaml`:
+
+```
+uv run python scripts/momentum/build_interim_universe.py --download      # ~1 /v2/assets call + daily bars per candidate
+uv run python scripts/momentum/build_interim_universe.py --assets-json <out>/assets_<date>.json   # offline rebuild
+```
+
+- Candidates: Alpaca `/v2/assets` (US equities, active and inactive; live endpoint, falling back to paper on
+  401/403), filtered to NYSE/NASDAQ/AMEX/ARCA/BATS, plain 1-5 letter symbols, and names that don't look like
+  ETFs, funds, warrants, rights, units, preferreds, notes or SPACs. The raw snapshot and its sha256 are saved.
+- Selection: D4 (`data/universe.py`, unchanged). Window: 60 sessions before `as_of` 2025-11-03. Screens: median
+  close $5 or more, median dollar volume $10M or more. Then 3 liquidity x 3 volatility cells, 56 per cell with a
+  fixed seed, so 504 names plus SPY.
+- Output (default `<data dir>/universes/momentum_interim_v0/`): `symbols_500.txt` (a `#` provenance header, then
+  one ticker per line; `pull_archive.py` skips `#` lines), the D4 manifest with every candidate's measurements
+  and exclusion reason, and `candidates_interim.csv`. The script exits 1 if any cell is short.
+- **Limitations:**
+  - It uses one `as_of`, so names that delisted before the window have no window bars and are excluded. That's
+    survivor bias toward names alive in late 2025.
+  - Security type is guessed from the name, so it's approximate, and ADRs are kept.
+  - There's no sector cap, because Alpaca has no GICS sector.
+  - Volatility is D4's log-return std, not A5's percentage returns.
+
+  A4/A5 replace all of this.
+
 ## Measured results (pilot, PAID Alpaca plan, run 2026-11-13)
 
 All numbers below come from a **paid** Alpaca account. The planned switch to the free plan can change the rate

@@ -1,0 +1,29 @@
+# INTERIM universe for the A1 staged pulls (300x2, 500x5) until A4 (weekly eligibility) and A5 (weekly 3x3
+# schedule) exist. Built by:
+#   uv run python scripts/momentum/build_interim_universe.py --download
+# Candidates come from Alpaca /v2/assets (active and inactive US equities), filtered to listed common stock by
+# exchange, symbol shape and name rules. Limitations, stated up front:
+#   - one as_of date, so names that died before the window are excluded (survivor bias toward late-2025 names);
+#   - security type is inferred from names (approximate; ADRs are kept);
+#   - no sector cap (Alpaca has no GICS sector);
+#   - volatility is D4's std of daily log returns, not A5's percentage returns.
+# Thresholds are fixed before looking at any strategy result.
+name: momentum_interim_v0
+candidates: candidates_interim.csv  # placeholder; the script writes and points at <out>/candidates_interim.csv
+as_of: "2025-11-03"                 # first session after pull_archive's default --end (2025-10-31)
+window_sessions: 60
+feed: sip
+
+screens:
+  min_median_close: 5               # dollars
+  min_median_dollar_volume: 10000000  # A4's $10M median daily dollar volume
+  min_morning_coverage: null        # skipped: it would need minute bars for every candidate
+
+cells:
+  liquidity_bins: 3
+  volatility_bins: 3
+  per_cell: 56                      # 9 x 56 = 504 names, plus SPY added by the script
+  held_out_per_cell: 0              # the archive pull has no dev/held-out split; A5 decides that
+
+sector_cap: null
+seed: 20261117
