@@ -29,6 +29,11 @@ class Surrogate:
     """Bootstrap ensemble of ``HistGradientBoostingRegressor`` models."""
 
     def __init__(self, cfg: SurrogateSection, seed: int) -> None:
+        """Bind the ensemble settings and seed; nothing is fitted until ``fit``.
+
+        Inputs: ``surrogate`` section (model count and hyperparameters) and the seed from which the
+        bootstrap resamples and each model's random state are drawn. Timing: holds no data.
+        """
         self._cfg = cfg
         self._seed = seed
         self._models: list[HistGradientBoostingRegressor] = []

@@ -113,7 +113,9 @@ class UniverseLike(Protocol):
 
     version: str
 
-    def week(self, week_start: date) -> UniverseWeek: ...
+    def week(self, week_start: date) -> UniverseWeek:
+        """Members of the ISO week starting ``week_start`` (a Monday), known before that week opens."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -199,22 +201,6 @@ def chunk_result(res: AccountResult, panel: MarketPanel, n_prefix: int, sessions
         entries.append((offset, row.asset_id, row.exit_reason == _UNRESOLVED))
     return ChunkResult(
         sessions=sessions, daily_returns=daily, entries=tuple(sorted(entries)), ambiguous_bars=res.ambiguous_bars
-    )
-
-
-def _join_windows(parts: Sequence[WindowResult]) -> WindowResult:
-    """Join per-span windows in order, re-indexing entries and summing ambiguous bars."""
-    sessions: list[date] = []
-    entries = []
-    for part in parts:
-        offset = len(sessions)
-        sessions.extend(part.sessions)
-        entries.extend((offset + pos, asset, unresolved) for pos, asset, unresolved in part.entries)
-    return WindowResult(
-        sessions=tuple(sessions),
-        daily_returns=np.concatenate([p.daily_returns for p in parts]),
-        entries=tuple(entries),
-        ambiguous_bars=sum(p.ambiguous_bars for p in parts),
     )
 
 
@@ -578,7 +564,7 @@ class ChunkReplayer:
             codes = [out.outcomes[i] for out in outputs]
             responses.append(
                 ReplayResponse(
-                    window=_join_windows([out.windows[i] for out in outputs]),
+                    window=WindowResult.concat([out.windows[i] for out in outputs]),
                     replays=codes.count("replay"),
                     alias_hits=codes.count("alias"),
                     mask_hits=codes.count("mask"),

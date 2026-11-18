@@ -53,6 +53,7 @@ _PANEL_FIELDS = ("open", "high", "low", "close", "volume", "eligible")
 
 
 def _canonical_json(obj: object) -> str:
+    """The one canonical JSON for hashed keys (sorted keys, compact, ASCII, NaN refused); cache.py shares it."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
 
 

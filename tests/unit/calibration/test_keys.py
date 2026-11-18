@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import re
+import sys
 import zlib
 from dataclasses import replace
 from datetime import date, timedelta
@@ -446,6 +447,10 @@ def test_code_version_changes_with_source(tmp_path, monkeypatch):
     name = "d6b_codever_pkg"
     _write_pkg(tmp_path, name, "Y = 2\n")
     monkeypatch.syspath_prepend(str(tmp_path))
+    # find_spec of a submodule imports the package; undo that at teardown. setitem records the key as
+    # absent (so teardown deletes it) and delitem leaves it absent for the test.
+    monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.delitem(sys.modules, name)
 
     v1 = code_version((name,))
     assert HEX16.match(v1)
@@ -509,3 +514,8 @@ def test_chunk_spans_split_on_iso_week_with_holiday():
     spans = chunk_spans(sessions, "chunk")
     assert [len(s.sessions) for s in spans] == [4, 5]
     assert all(s.sessions[0].weekday() == 0 for s in spans)
+
+
+def test_code_version_test_leaves_no_module_behind():
+    """Runs after ``test_code_version_changes_with_source`` (file order): its package import is undone."""
+    assert "d6b_codever_pkg" not in sys.modules

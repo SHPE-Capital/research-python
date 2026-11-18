@@ -255,7 +255,12 @@ def _finalist_dict(f: Finalist) -> dict[str, Any]:
 
 
 def finalists_document(selection: Selection) -> dict[str, Any]:
-    """The ``finalists.json`` body: status, selected id, reasons and every finalist's metrics and checks."""
+    """Build the ``finalists.json`` body.
+
+    Input: the D5 selection. Output: a JSON-ready dict with the status, the selected config id (or
+    None), the reasons and, for every finalist, its search J, validation and report metrics and
+    acceptance checks. Pure. Timing: every value was fixed at the calibration cutoff.
+    """
     return {
         "status": selection.status,
         "selected": selection.selected.config_id if selection.selected is not None else None,

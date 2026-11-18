@@ -52,5 +52,10 @@ class StaticUniverseProvider:
         return cls([(a, a) for a in archive.asset_ids], version)
 
     def week(self, week_start: date) -> UniverseWeek:
-        """Return the members for the ISO week starting ``week_start`` (must be a Monday)."""
+        """Return the members for the ISO week starting ``week_start``.
+
+        Input: a Monday (else ``UniverseWeek`` raises ValueError). Output: a ``UniverseWeek`` with the
+        fixed members and this provider's version. Timing: the members never change, so the week is
+        known before it opens.
+        """
         return UniverseWeek(week_start=week_start, members=self.members, version=self.version)

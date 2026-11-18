@@ -46,7 +46,9 @@ class EvalOutcome:
 class SearchEvaluator(Protocol):
     """Scores a batch of configs on the search window (one outcome per config, any order)."""
 
-    def evaluate(self, configs: Sequence[Config]) -> list[EvalOutcome]: ...
+    def evaluate(self, configs: Sequence[Config]) -> list[EvalOutcome]:
+        """One outcome per config (any order). Timing: search-window data known at the cutoff only."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -68,7 +70,12 @@ class AuditRecord:
     data: dict[str, Any]
 
     def to_json(self) -> str:
-        """Canonical JSON line (sorted keys) under schema ``search_audit.v1``."""
+        """Return the record as one canonical JSON line.
+
+        Output: ``{"schema": "search_audit.v1", "kind", "seed", "round", **data}`` with sorted keys.
+        ``data`` holds only JSON-safe values (a non-finite score is written as null by
+        ``SearchRun.tell``), so the line parses under strict JSON. Pure; depends only on the record.
+        """
         return json.dumps(
             {"schema": AUDIT_SCHEMA, "kind": self.kind, "seed": self.seed, "round": self.round, **self.data},
             sort_keys=True,
@@ -96,7 +103,7 @@ class _Proposal:
     parents: tuple[str, ...]
 
 
-def half_up(x: float) -> int:
+def _half_up(x: float) -> int:
     """Round half up: ``floor(x + 0.5)``."""
     return math.floor(x + 0.5)
 
@@ -293,6 +300,12 @@ class SearchRun:
     ``ask`` returns the next batch to evaluate (``[]`` once finished); ``tell`` must return outcomes
     for exactly that batch. ``budget`` and ``max_wall_seconds`` override the section's budget and
     add a wall-clock stop checked at each ``ask`` (round boundary).
+
+    Attributes:
+        budget: Logical evaluations allowed (cache hits count).
+        status: ``running`` until the search stops.
+        proposals: The latest round's proposals in proposal order (initial sample or evolution plus
+            broad), before selection; read-only, for inspection and tests.
     """
 
     def __init__(
@@ -306,6 +319,13 @@ class SearchRun:
         max_wall_seconds: float | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        """Start a search for one seed.
+
+        Inputs: the grid domain, the search and surrogate sections, the seed (the only randomness
+        source, ``np.random.default_rng(seed)``), an optional budget override (>= 1, else
+        ValueError), an optional wall-clock limit in seconds and the clock it is read from (its value
+        now is the start time). Nothing is proposed or evaluated until ``ask``. Timing: holds no data.
+        """
         self.budget = search.budget if budget is None else budget
         if self.budget < 1:
             raise ValueError("budget must be >= 1")
@@ -416,7 +436,7 @@ class SearchRun:
     def _propose(self) -> list[_Proposal]:
         s = self._search
         total = s.proposals_per_round
-        n_evo = half_up(total * s.mutation_share)
+        n_evo = _half_up(total * s.mutation_share)
         pop = self._population()
         taken = set(self._results)
         attempts, cap = [0], s.max_proposal_attempts_factor * total
@@ -474,7 +494,7 @@ class SearchRun:
     def _pick_random(self, props: list[_Proposal], slots: int) -> list[tuple[str, str]]:
         evo = [p.config_id for p in props if p.origin in _EVO_ORIGINS]
         broad = [p.config_id for p in props if p.origin not in _EVO_ORIGINS]
-        q_evo = min(half_up(self._search.evals_per_round * self._search.mutation_share), slots, len(evo))
+        q_evo = min(_half_up(self._search.evals_per_round * self._search.mutation_share), slots, len(evo))
         q_broad = min(slots - q_evo, len(broad))
         q_evo = min(slots - q_broad, len(evo))
         return [(c, "pre_surrogate_evolution") for c in _pick(self._rng, evo, q_evo)] + [

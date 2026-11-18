@@ -49,6 +49,11 @@ class _Section(BaseModel):
 
 
 class WeightsSection(_Section):
+    """Score-weight policy settings: uniform share, ESS target, solver bounds and descriptor lookback.
+
+    Read by the weight solver and the similarity descriptors before any return is looked at.
+    """
+
     uniform_mix: float = 0.20
     ess_target_fraction: float = 0.60
     ess_tolerance: float = 0.01
@@ -71,6 +76,8 @@ class WeightsSection(_Section):
 
 
 class ScoreSection(_Section):
+    """The score ``J``'s downside penalty coefficient ``c``."""
+
     downside_coeff: float = 0.5
 
     @model_validator(mode="after")
@@ -80,6 +87,8 @@ class ScoreSection(_Section):
 
 
 class StrategyEntry(_Section):
+    """One ``search.strategies`` entry: id, registry base, optional budget/seeds and account overrides."""
+
     id: str
     base: str = "breakout"
     budget: int | None = None
@@ -99,6 +108,8 @@ class StrategyEntry(_Section):
 
 
 class SearchSection(_Section):
+    """Evolutionary search settings per seed: budget, seeds, rounds, selection split and finalists."""
+
     budget: int = 2048
     seeds: list[int] = [1, 2, 3]
     initial_samples: int = 256
@@ -144,6 +155,8 @@ class SearchSection(_Section):
 
 
 class SurrogateSection(_Section):
+    """Surrogate ensemble size and ``HistGradientBoostingRegressor`` hyperparameters."""
+
     n_models: int = 5
     max_iter: int = 200
     learning_rate: float = 0.05
@@ -163,6 +176,8 @@ class SurrogateSection(_Section):
 
 
 class ValidationSection(_Section):
+    """Validation window length in sessions, ending at the cutoff."""
+
     sessions: int = 63
 
     @model_validator(mode="after")
@@ -203,6 +218,11 @@ class AcceptanceSection(_Section):
 
 
 class CacheSection(_Section):
+    """Evaluation cache location, granularity, warm-up prefix and SQLite busy timeout.
+
+    ``path`` and ``busy_timeout_s`` are operational (``HASH_EXCLUDED_FIELDS``).
+    """
+
     path: str | None = None  # None -> <compute scratch>/momentum_cache.sqlite
     granularity: Granularity = "chunk"
     warmup_sessions: int = 20  # provisional; in the cache key
@@ -216,6 +236,12 @@ class CacheSection(_Section):
 
 
 class ComputeSection(_Section):
+    """Execution settings: worker processes, threads per worker, kernel, scratch dir and wall limit.
+
+    Only ``kernel`` is in the protocol hash; the rest are operational (``HASH_EXCLUDED_FIELDS``). On
+    Windows the replayer caps the worker pool at 61 processes (a platform limit).
+    """
+
     workers: int = 1
     threads_per_worker: int = 1
     kernel: Literal["fast", "oracle"] = "fast"
@@ -231,6 +257,8 @@ class ComputeSection(_Section):
 
 
 class WalkforwardSection(_Section):
+    """Walk-forward settings: reserved-period start, forward starting cash and the policies run."""
+
     reserved_start: date | None = None  # no default date; the walk-forward task refuses to run while unset
     starting_cash: float = 100_000.0
     policies: list[Policy] = ["uniform", "recency", "similarity"]
@@ -246,6 +274,11 @@ class WalkforwardSection(_Section):
 
 
 class MomentumProtocol(BaseModel):
+    """The resolved 0-G protocol (stream D slice): every tunable of the weekly calibration.
+
+    ``frozen: true`` refuses overrides and, with a matching hash, unlocks the reserved period.
+    """
+
     model_config = ConfigDict(extra="forbid", frozen=True)
     frozen: bool = False
     weights: WeightsSection = WeightsSection()
@@ -261,6 +294,15 @@ class MomentumProtocol(BaseModel):
 
 @dataclass(frozen=True)
 class ResolvedProtocol:
+    """A protocol as one run used it.
+
+    Attributes:
+        protocol: The validated protocol after overrides.
+        overrides: The ``--set`` overrides applied, in order.
+        source: The YAML path, or ``"<defaults>"``.
+        hash: ``protocol_hash(protocol)`` (run ids, checkpoint headers, the reserved unlock).
+    """
+
     protocol: MomentumProtocol
     overrides: tuple[str, ...]
     source: str  # path string or "<defaults>"
@@ -300,7 +342,13 @@ def protocol_hash(p: MomentumProtocol) -> str:
 
 
 def apply_overrides(p: MomentumProtocol, overrides: Sequence[str]) -> MomentumProtocol:
-    """Apply `"a.b.c=value"` overrides (values parsed as YAML); validate the whole model once."""
+    """Apply ``"section.field=value"`` overrides to a protocol.
+
+    Inputs: a protocol and overrides (values parsed as YAML; applied in order). Output: a new
+    protocol, validated once as a whole (the input unchanged when there are no overrides). Raises
+    FrozenProtocolError for a frozen protocol or an override of ``frozen``, ValueError for a malformed
+    item or unknown path, and ValidationError for an invalid result. Pure; no timing dependence.
+    """
     if not overrides:
         return p
     if p.frozen:
@@ -326,7 +374,12 @@ def apply_overrides(p: MomentumProtocol, overrides: Sequence[str]) -> MomentumPr
 
 
 def load_protocol(path: str | Path | None = None, overrides: Sequence[str] = ()) -> ResolvedProtocol:
-    """Load a protocol YAML (or the defaults when `path` is None) and apply overrides."""
+    """Load and resolve a protocol.
+
+    Inputs: a YAML path (None = the model defaults) and ``--set`` overrides. Output: the
+    ``ResolvedProtocol`` (protocol, overrides, source, hash). Raises what ``apply_overrides`` and
+    model validation raise. Reads only the YAML file; no timing dependence.
+    """
     if path is None:
         base, source = MomentumProtocol(), "<defaults>"
     else:
@@ -337,4 +390,8 @@ def load_protocol(path: str | Path | None = None, overrides: Sequence[str] = ())
 
 
 def dump_protocol_yaml(p: MomentumProtocol) -> str:
+    """Return the protocol as YAML (every field, in model order) that ``load_protocol`` reads back equal.
+
+    Input: a protocol. Output: YAML text. Pure.
+    """
     return yaml.safe_dump(p.model_dump(mode="json"), sort_keys=False)

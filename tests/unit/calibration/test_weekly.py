@@ -56,6 +56,9 @@ RUN_JSON_KEYS = {
     "chunk_replays",
     "cache_stats",
     "overrides",
+    "data_version",
+    "universe_version",
+    "descriptors_version",
 }
 
 
@@ -180,7 +183,8 @@ def test_reserved_guard_rules(small_protocol, tmp_path) -> None:
 @pytest.mark.parametrize("policy", ["uniform", "recency", "similarity"])
 def test_end_to_end_each_policy(policy, archive, small_protocol, shared_cache, tmp_path) -> None:
     rp = small_protocol
-    out = calibrate_week(_inputs(archive, rp, shared_cache, tmp_path), AS_OF, policy)
+    inputs = _inputs(archive, rp, shared_cache, tmp_path)
+    out = calibrate_week(inputs, AS_OF, policy)
     plan = _plan(archive, rp)
     assert out.status in {"selected", "no_deployment"}
     assert out.plan == plan
@@ -207,6 +211,9 @@ def test_end_to_end_each_policy(policy, archive, small_protocol, shared_cache, t
     run = _run_json(out.run_dir)
     assert set(run) == RUN_JSON_KEYS
     assert run["status"] == out.status and run["policy"] == policy
+    assert run["data_version"] == inputs.data_version
+    assert run["universe_version"] == inputs.universe.version
+    assert run["descriptors_version"] == inputs.descriptors.version
     assert run["validation_ess"] == pytest.approx(out.validation_weights.ess)
     assert load_protocol(out.run_dir / "protocol.resolved.yaml").hash == rp.hash
     assert (policy == "similarity") == (run["scaler_medians"] is not None)

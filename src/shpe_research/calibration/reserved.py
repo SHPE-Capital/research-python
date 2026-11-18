@@ -36,15 +36,27 @@ class ReservedGuard:
 
     @classmethod
     def from_protocol(cls, rp: ResolvedProtocol, expected_hash: str | None) -> ReservedGuard:
-        """Build the guard from a resolved protocol and the caller's expected hash (None = no unlock)."""
+        """Build the guard for one run.
+
+        Inputs: the resolved protocol (``walkforward.reserved_start``, ``frozen`` and its hash) and the
+        caller's expected hash (``--protocol-hash``; None = no unlock). Output: the guard. Pure; reads
+        no data.
+        """
         return cls(rp.protocol.walkforward.reserved_start, rp.protocol.frozen, rp.hash, expected_hash)
 
     def unlocked(self) -> bool:
-        """True only if the protocol is frozen and ``expected_hash`` equals its hash."""
+        """Whether the reserved period is open to this run.
+
+        Output: True only if the protocol is frozen and ``expected_hash`` equals its hash. Pure.
+        """
         return self.frozen and self.expected_hash is not None and self.expected_hash == self.protocol_hash
 
     def require_set(self) -> None:
-        """Raise ReservedPeriodError if ``reserved_start`` is unset (callers that must not run without it)."""
+        """Refuse to run while ``reserved_start`` is unset.
+
+        For callers that must not run without it (the walk-forward), called before anything is
+        written or read. Raises ReservedPeriodError; returns None otherwise. Pure.
+        """
         if self.reserved_start is None:
             raise ReservedPeriodError("walkforward.reserved_start is not set; declare it before any evaluation")
 

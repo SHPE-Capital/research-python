@@ -28,6 +28,7 @@ from shpe_research.calibration.weekly import (
     CalibrationInputs,
     CalibrationOutcome,
     WeeklyCalibration,
+    counter_delta,
     default_replayer,
     drive,
 )
@@ -49,10 +50,6 @@ class SchedulerReport:
     shared: ReplayCounters
     by_strategy: Mapping[str, ReplayCounters]
     cache: CacheStats
-
-
-def _delta(after: object, before: object) -> dict[str, int]:
-    return {f.name: getattr(after, f.name) - getattr(before, f.name) for f in dataclasses.fields(after)}
 
 
 def run_strategies(
@@ -88,12 +85,12 @@ def run_strategies(
     before_cache = dataclasses.replace(inputs.cache.stats)
     outcomes = drive(calibrations, rep)
     report = SchedulerReport(
-        shared=ReplayCounters(**_delta(rep.counters, before)),
+        shared=ReplayCounters(**counter_delta(rep.counters, before)),
         by_strategy={
-            sid: ReplayCounters(**_delta(c, before_by.get(sid, ReplayCounters())))
+            sid: ReplayCounters(**counter_delta(c, before_by.get(sid)))
             for sid, c in sorted(rep.by_strategy.items())
             if sid in ids
         },
-        cache=CacheStats(**_delta(inputs.cache.stats, before_cache)),
+        cache=CacheStats(**counter_delta(inputs.cache.stats, before_cache)),
     )
     return {spec.strategy_id: out for spec, out in zip(specs, outcomes, strict=True)}, report

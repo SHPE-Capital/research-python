@@ -21,6 +21,9 @@ stored under ``PathKey`` (context, chunk, mask hash; keys prefixed ``"p:"`` in
 the same ``paths`` table), and table ``aliases(ctx, chunk, alias_id,
 mask_hash)`` records which mask each namespaced config id produced on each
 chunk, so ``get_window_dedup`` replays each unique mask once.
+
+Only the dedup path (``get_window_dedup``) is live in production (``ChunkReplayer``); ``get_window``,
+``get`` and ``put`` are the D6 spec surface, kept and tested for direct config-keyed use.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ from typing import TypeVar
 import numpy as np
 
 from shpe_research.calibration.acceptance import Entry
+from shpe_research.calibration.keys import _canonical_json
 
 _KEY_SCHEMA = "d6.config.v1"
 _PATH_KEY_SCHEMA = "d6b.mask.v1"
@@ -55,10 +59,6 @@ _ABANDONED: list[sqlite3.Connection] = []
 
 class LookaheadError(RuntimeError):
     """A chunk containing a session after the decision cutoff was requested."""
-
-
-def _canonical_json(obj: object) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
 
 
 def _sha256_hex(text: str) -> str:
@@ -293,11 +293,11 @@ class WindowResult:
         object.__setattr__(self, "ambiguous_bars", int(self.ambiguous_bars))
 
     @classmethod
-    def concat(cls, parts: Sequence[ChunkResult]) -> WindowResult:
-        """Join chunk results in order into one window.
+    def concat(cls, parts: Sequence[ChunkResult | WindowResult]) -> WindowResult:
+        """Join chunk results (or windows) in order into one window.
 
-        Input: non-empty chunk results whose sessions are strictly increasing
-        across parts. Output: the window; entry offsets are shifted to window
+        Input: non-empty chunk results or windows whose sessions are strictly
+        increasing across parts. Output: the window; entry offsets are shifted to window
         positions and ambiguous bars summed. Raises ValueError otherwise. Pure;
         the caller guarantees every part ends at or before the cutoff.
         """

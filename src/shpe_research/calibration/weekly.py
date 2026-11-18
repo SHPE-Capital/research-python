@@ -176,7 +176,13 @@ def guarded_cutoff(archive: Archive, as_of: date, guard: ReservedGuard) -> date:
 
 
 def default_replayer(inputs: CalibrationInputs) -> ChunkReplayer:
-    """The replayer ``calibrate_week`` uses when none is given (kernel, warm-up and workers from the protocol)."""
+    """The replayer ``calibrate_week`` uses when none is given.
+
+    Input: the calibration inputs. Output: a ``ChunkReplayer`` on ``inputs.archive``,
+    ``inputs.universe`` and ``inputs.cache`` with ``data_version`` and ``compute.kernel``,
+    ``cache.warmup_sessions``, ``compute.workers`` and ``compute.threads_per_worker`` from the
+    protocol. Builds no panel and reads no bar; the replayer's ``run`` enforces the cutoff.
+    """
     p = inputs.rp.protocol
     return ChunkReplayer(
         inputs.archive,
@@ -400,6 +406,9 @@ class WeeklyCalibration:
         return {
             "run_id": self.run_id,
             "status": status,
+            "data_version": self.inputs.data_version,
+            "universe_version": self.inputs.universe.version,
+            "descriptors_version": self.inputs.descriptors.version,
             "cutoff": self.plan.cutoff.isoformat(),
             "policy": self.policy,
             "strategy_id": self.strategy.strategy_id,
@@ -505,10 +514,16 @@ def _snapshot(replayer: ChunkReplayer) -> tuple[ReplayCounters, dict[str, Replay
     return dataclasses.replace(replayer.counters), {k: dataclasses.replace(v) for k, v in replayer.by_strategy.items()}
 
 
-def _delta(after: ReplayCounters, before: ReplayCounters | None) -> dict[str, int]:
-    a = dataclasses.asdict(after)
-    b = dataclasses.asdict(before) if before is not None else {}
-    return {k: v - b.get(k, 0) for k, v in a.items()}
+def counter_delta(after: Any, before: Any | None) -> dict[str, int]:
+    """Field-by-field ``after - before`` of two instances of one counters dataclass.
+
+    Inputs: two ``ReplayCounters`` or ``CacheStats`` snapshots (``before`` None counts as zeros).
+    Output: ``{field: difference}``, ready for ``type(after)(**delta)``. Bookkeeping only; pure.
+    """
+    return {
+        f.name: getattr(after, f.name) - (getattr(before, f.name) if before is not None else 0)
+        for f in dataclasses.fields(after)
+    }
 
 
 def _batched_run(
@@ -571,8 +586,8 @@ def drive(calibrations: Sequence[WeeklyCalibration], replayer: ChunkReplayer) ->
     v_responses = _batched_run(replayer, validation, plan.validation_spans, plan.cutoff)
     after, after_by = _snapshot(replayer)
     counters = {
-        "shared": _delta(after, before),
-        "by_strategy": {sid: _delta(c, before_by.get(sid)) for sid, c in sorted(after_by.items())},
+        "shared": counter_delta(after, before),
+        "by_strategy": {sid: counter_delta(c, before_by.get(sid)) for sid, c in sorted(after_by.items())},
     }
     outcomes: list[CalibrationOutcome] = []
     errors: list[IncompleteRunError] = []

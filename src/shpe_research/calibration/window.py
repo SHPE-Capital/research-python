@@ -83,6 +83,11 @@ class Archive:
     """
 
     def __init__(self, root: Path, chunks: tuple[_ChunkInfo, ...], asset_ids: tuple[str, ...]) -> None:
+        """Bind already-read chunk metadata (use ``Archive.open``).
+
+        Inputs: the archive directory, each chunk's metadata in session order and the asset ids.
+        Builds the session index and the session -> chunk map; reads no bar. Timing: metadata only.
+        """
         self.root = root
         self._chunks = chunks
         self.asset_ids = asset_ids
