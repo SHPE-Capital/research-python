@@ -310,6 +310,177 @@ def _add_data(sub) -> None:
     _add_snapshot(dsub)
 
 
+# ---------------------------------------------------------------- momentum
+
+
+def _date(value: str):
+    from datetime import date
+
+    return date.fromisoformat(value)
+
+
+def _momentum_cache_path(p) -> Path:
+    """``cache.path``, else ``<compute.scratch_dir or runs_dir()/momentum-scratch>/momentum_cache.sqlite``."""
+    from shpe_research.config import runs_dir
+
+    if p.cache.path:
+        return Path(p.cache.path)
+    scratch = Path(p.compute.scratch_dir) if p.compute.scratch_dir else runs_dir() / "momentum-scratch"
+    return scratch / "momentum_cache.sqlite"
+
+
+def _momentum_calibrate(args: argparse.Namespace) -> int:
+    from shpe_research.calibration.cache import EvalCache
+    from shpe_research.calibration.descriptors import PanelProxyDescriptors
+    from shpe_research.calibration.reserved import ReservedGuard, ReservedPeriodError
+    from shpe_research.calibration.scheduler import run_strategies
+    from shpe_research.calibration.strategies import load_strategies
+    from shpe_research.calibration.universe import StaticUniverseProvider
+    from shpe_research.calibration.weekly import CalibrationInputs, IncompleteRunError, guarded_cutoff
+    from shpe_research.calibration.window import Archive, InsufficientHistoryError
+    from shpe_research.config.momentum import load_protocol
+
+    rp = load_protocol(args.protocol, args.set)
+    p = rp.protocol
+    archive = Archive.open(args.panel_root)  # metadata only
+    try:
+        # The guard runs before any bar is read; the descriptors read nothing after the cutoff.
+        cutoff = guarded_cutoff(archive, args.cutoff, ReservedGuard.from_protocol(rp, args.protocol_hash))
+        cache = EvalCache(_momentum_cache_path(p), busy_timeout_s=p.cache.busy_timeout_s)
+        try:
+            inputs = CalibrationInputs(
+                rp=rp,
+                archive=archive,
+                universe=StaticUniverseProvider.from_archive(archive),
+                descriptors=PanelProxyDescriptors(archive, lookback=p.weights.descriptor_lookback, through=cutoff),
+                cache=cache,
+                data_version=args.data_version,
+                out_root=args.out,
+                expected_hash=args.protocol_hash,
+            )
+            outcomes, _ = run_strategies(inputs, args.cutoff, args.policy, load_strategies(rp))
+        finally:
+            cache.close()
+    except (IncompleteRunError, ReservedPeriodError, InsufficientHistoryError) as exc:  # incl. StaleArchiveError
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    for outcome in outcomes.values():
+        print(f"{outcome.status}: {outcome.run_dir / 'weekly_config.json'}")
+    return 0
+
+
+def _momentum_walkforward(args: argparse.Namespace) -> int:
+    """``shpe momentum walkforward``: run or resume the D8 walk-forward.
+
+    Exit codes: 0 on ``complete`` or ``archive_end``; 2 with a message on stderr for
+    IncompleteRunError (rerunning the same command resumes), InsufficientHistoryError (including
+    StaleArchiveError: fix the archive or the first cutoff) and ReservedPeriodError. A
+    ReservedPeriodError while ``reserved_start`` is set is a stop at the reserved boundary, not a
+    failure: every earlier step is recorded and rerunning goes no further unless the protocol is
+    frozen and ``--protocol-hash`` matches. Exit 2 keeps the code the D8 brief fixes for it.
+    """
+    from shpe_research.calibration.cache import EvalCache
+    from shpe_research.calibration.descriptors import PanelProxyDescriptors
+    from shpe_research.calibration.reserved import ReservedGuard, ReservedPeriodError
+    from shpe_research.calibration.strategies import load_strategies
+    from shpe_research.calibration.universe import StaticUniverseProvider
+    from shpe_research.calibration.walkforward import run_walkforward, weekly_cutoffs
+    from shpe_research.calibration.weekly import CalibrationInputs, IncompleteRunError
+    from shpe_research.calibration.window import Archive, InsufficientHistoryError
+    from shpe_research.config.momentum import load_protocol
+
+    overrides = list(args.set)
+    if args.policies:  # an override, so a frozen protocol refuses it (frozen runs set policies in the YAML)
+        overrides.append(f"walkforward.policies=[{','.join(args.policies)}]")
+    rp = load_protocol(args.protocol, overrides)
+    p = rp.protocol
+    strategies = load_strategies(rp)
+    if len(strategies) != 1:
+        raise ValueError(f"walkforward needs exactly one strategy in search.strategies, got {len(strategies)}")
+    archive = Archive.open(args.panel_root)  # metadata only
+    guard = ReservedGuard.from_protocol(rp, args.protocol_hash)
+    try:
+        # The guard runs before any bar is read: the descriptors read nothing past the last cutoff
+        # the guard allows (later cutoffs are refused by run_walkforward before they are calibrated).
+        guard.require_set()
+        cutoffs = weekly_cutoffs(archive, args.first_cutoff, args.weeks)
+        if not cutoffs:
+            raise ValueError(f"the archive has no session in the ISO week of {args.first_cutoff}")
+        guard.check_calibration(cutoffs[0])
+        through = max(c for c in cutoffs if guard.allows_calibration(c))
+        cache = EvalCache(_momentum_cache_path(p), busy_timeout_s=p.cache.busy_timeout_s)
+        try:
+            inputs = CalibrationInputs(
+                rp=rp,
+                archive=archive,
+                universe=StaticUniverseProvider.from_archive(archive),
+                descriptors=PanelProxyDescriptors(archive, lookback=p.weights.descriptor_lookback, through=through),
+                cache=cache,
+                data_version=args.data_version,
+                out_root=args.out / "artifacts",
+                expected_hash=args.protocol_hash,
+            )
+            result = run_walkforward(inputs, args.first_cutoff, args.weeks, args.out, strategy=strategies[0])
+        finally:
+            cache.close()
+    except ReservedPeriodError as exc:
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        if guard.reserved_start is not None:
+            print(
+                f"stopped at the reserved-period boundary ({guard.reserved_start}): this is a boundary stop, "
+                f"not a failure; the steps before it are recorded in {args.out}. Rerunning goes no further "
+                "unless the protocol is frozen and --protocol-hash matches.",
+                file=sys.stderr,
+            )
+        return 2
+    except IncompleteRunError as exc:
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        print("rerun the same command to resume", file=sys.stderr)
+        return 2
+    except InsufficientHistoryError as exc:  # incl. StaleArchiveError
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    print(f"{result.stopped}: {len(result.records)} steps; daily account series in {result.out_dir / 'daily'}")
+    return 0
+
+
+def _policies(value: str) -> list[str]:
+    return [s.strip() for s in value.split(",") if s.strip()]
+
+
+def _add_momentum(sub) -> None:
+    from shpe_research.config import runs_dir
+    from shpe_research.config.momentum import DEFAULT_PROTOCOL_PATH
+
+    group = sub.add_parser("momentum", help="momentum weekly calibration (stream D)")
+    msub = group.add_subparsers(dest="momentum_command", metavar="<momentum command>", required=True)
+
+    p = msub.add_parser("calibrate", help="calibrate one weekend: one cutoff -> one 0-A weekly config (D7)")
+    p.add_argument("--panel-root", type=Path, required=True, help="A6 week-chunk archive directory")
+    p.add_argument("--cutoff", type=_date, required=True, help="as-of date YYYY-MM-DD (last session on or before)")
+    p.add_argument("--policy", required=True, choices=["uniform", "recency", "similarity"])
+    p.add_argument("--data-version", required=True, help="identity of the data snapshot (cache key, artifact)")
+    p.add_argument("--protocol", type=Path, default=DEFAULT_PROTOCOL_PATH, help="0-G protocol YAML")
+    p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="protocol override (repeatable)")
+    p.add_argument("--out", type=Path, default=runs_dir() / "momentum" / "calibrate", help="run directories root")
+    p.add_argument("--protocol-hash", default=None, metavar="HEX", help="unlocks the reserved period if frozen")
+    p.set_defaults(handler=_momentum_calibrate)
+
+    p = msub.add_parser("walkforward", help="walk-forward over consecutive weekends with forward accounts (D8)")
+    p.add_argument("--panel-root", type=Path, required=True, help="A6 week-chunk archive directory")
+    p.add_argument("--first-cutoff", type=_date, required=True, help="first cutoff YYYY-MM-DD (its ISO week)")
+    p.add_argument("--weeks", type=int, required=True, help="number of consecutive weeks")
+    p.add_argument("--data-version", required=True, help="identity of the data snapshot (cache key, artifact)")
+    p.add_argument("--protocol", type=Path, default=DEFAULT_PROTOCOL_PATH, help="0-G protocol YAML")
+    p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="protocol override (repeatable)")
+    p.add_argument("--out", type=Path, default=runs_dir() / "momentum" / "walkforward", help="walk-forward out dir")
+    p.add_argument("--protocol-hash", default=None, metavar="HEX", help="unlocks the reserved period if frozen")
+    p.add_argument(
+        "--policies", type=_policies, default=None, help="comma-separated subset (override of walkforward.policies)"
+    )
+    p.set_defaults(handler=_momentum_walkforward)
+
+
 # ---------------------------------------------------------------- main
 
 
@@ -341,6 +512,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_sweep(sub)
     _add_fixtures(sub)
     _add_data(sub)
+    _add_momentum(sub)
     from shpe_research.scaffold.new import _add_new
 
     _add_new(sub)
