@@ -13,7 +13,13 @@ from shpe_research.features.base import FEATURE_REGISTRY, Feature
 from shpe_research.testing.checks import check_feature, check_label, check_model, check_strategy
 from shpe_research.testing.fixtures import check_bars, synthetic_bars, synthetic_xy
 
-_FEATURE_PARAMS = {"past_return": {"window": 5}, "relative_volume": {"lookback_sessions": 1}}
+_FEATURE_PARAMS = {
+    "past_return": {"window": 5},
+    "past_return_days": {"days": 5},
+    "relative_volume": {"lookback_sessions": 1},
+}
+# Features that read other symbols' bars or minute bars from the context; the generic kit supplies none.
+_NEEDS_CONTEXT = {"har_rv", "market_beta", "market_return", "pair_spread_z"}
 
 
 def _build_feature(key: str) -> Feature:
@@ -27,6 +33,8 @@ def bars() -> pd.DataFrame:
 
 @pytest.mark.parametrize("key", sorted(FEATURE_REGISTRY))
 def test_check_feature_passes_builtins(key, bars):
+    if key in _NEEDS_CONTEXT:
+        pytest.skip("needs context bars; covered by its own unit tests")
     check_feature(_build_feature(key), bars)
 
 

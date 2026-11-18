@@ -30,10 +30,7 @@ def test_trade_does_not_import_events():
     assert subprocess.run([sys.executable, "-c", code], check=False).returncode == 0
 
 
-def test_simulate_trades_is_a_t1_stub():
-    from shpe_research.trade.simulate import simulate_trades
-    from shpe_research.trade.types import ExitPolicy, FillModel
+def test_fill_model_defaults():
+    from shpe_research.trade.types import FillModel
 
     assert FillModel().half_spread_bps == 2.0
-    with pytest.raises(NotImplementedError, match=r"TODO\(T1\)"):
-        simulate_trades(None, None, ExitPolicy())
