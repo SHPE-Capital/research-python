@@ -59,9 +59,7 @@ def normalize_weights(weights: ArrayLike | None, n: int) -> np.ndarray:
     return w / total
 
 
-def score_terms(
-    returns: ArrayLike, weights: ArrayLike | None, *, downside_coeff: float
-) -> ScoreTerms:
+def score_terms(returns: ArrayLike, weights: ArrayLike | None, *, downside_coeff: float) -> ScoreTerms:
     """Compute the mean, downside and J terms for a window of returns.
 
     Args:
