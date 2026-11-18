@@ -7,9 +7,9 @@ weekly reset). A ``no_deployment`` week is recorded as inactive: zero returns, e
 
 Out-dir layout:
 
-- ``checkpoint.json``: the run header (``CHECKPOINT_SCHEMA``, protocol hash, data version, strategy,
-  first cutoff, weeks, policies) plus ``in_progress`` (the step being run, or null), rewritten
-  atomically;
+- ``checkpoint.json``: the run header (``CHECKPOINT_SCHEMA``, protocol hash, data version, universe
+  schedule version, descriptor version, strategy, first cutoff, weeks, policies) plus
+  ``in_progress`` (the step being run, or null), rewritten atomically;
 - ``records/<cutoff:%Y%m%d>_<policy>.json``: one ``StepRecord`` per finished step, written
   atomically. The existence of a record is the checkpoint;
 - ``artifacts/<cutoff:%Y%m%d>/<run_id>/``: the D7 run directories;
@@ -19,8 +19,10 @@ Out-dir layout:
 A crashed step is an operational failure: no record is written, the exception propagates and the
 next run with the same arguments reruns that step. Nothing is ever filled with an invented result.
 Nothing on or after ``walkforward.reserved_start`` is calibrated or replayed unless the protocol is
-frozen and the caller passes its hash; the walk-forward refuses to start while ``reserved_start``
-is unset.
+frozen and the caller passes its hash (``CalibrationInputs.expected_hash``); the walk-forward refuses
+to start while ``reserved_start`` is unset.
+
+Single writer only: there is no lock against two processes running the same out dir at once.
 """
 
 from __future__ import annotations
@@ -60,7 +62,17 @@ CHECKPOINT_SCHEMA = "walkforward_checkpoint.v1"
 RECORD_SCHEMA = "walkforward_run_record.v1"
 
 _DAYS_PER_WEEK = 7
-_HEADER_FIELDS = ("schema", "protocol_hash", "data_version", "strategy_id", "first_cutoff", "n_weeks", "policies")
+_HEADER_FIELDS = (
+    "schema",
+    "protocol_hash",
+    "data_version",
+    "universe_version",
+    "descriptors_version",
+    "strategy_id",
+    "first_cutoff",
+    "n_weeks",
+    "policies",
+)
 _CSV_COLUMNS = ("session", "cutoff", "policy", "active", "config_id", "daily_return", "equity")
 # Cache-state artifact fields: excluded from ``artifact_sha256`` so a resumed run hashes like a clean one.
 _ARTIFACT_CACHE_STATE = (("runtime",), ("evaluations", "actual"))
@@ -248,10 +260,30 @@ def _write_record(out_dir: Path, rec: StepRecord) -> None:
     _atomic_write(_record_path(out_dir, rec.cutoff, rec.policy), rec.to_json() + "\n")
 
 
-def _load_records(out_dir: Path) -> dict[tuple[date, str], StepRecord]:
+def _load_records(
+    out_dir: Path, header: Mapping[str, Any], cutoffs: Sequence[date], policies: Sequence[str]
+) -> dict[tuple[date, str], StepRecord]:
+    """Load ``records/``, refusing any record that does not belong to this run.
+
+    Raises ValueError (naming the file) when a record's ``protocol_hash``, ``data_version`` or
+    ``strategy_id`` differs from the checkpoint header, or its (cutoff, policy) is not one of this
+    run's steps (``cutoffs`` x ``policies``).
+    """
+    steps = {(c, p) for c in cutoffs for p in policies}
     records: dict[tuple[date, str], StepRecord] = {}
     for path in sorted((out_dir / "records").glob("*.json")):
         rec = StepRecord.from_json(path.read_text(encoding="utf-8"))
+        for name in ("protocol_hash", "data_version", "strategy_id"):
+            if getattr(rec, name) != header[name]:
+                raise ValueError(
+                    f"{path.name}: {name} {getattr(rec, name)!r} != checkpoint {header[name]!r}; "
+                    "the record belongs to another run"
+                )
+        if (rec.cutoff, rec.policy) not in steps:
+            raise ValueError(
+                f"{path.name}: ({rec.cutoff}, {rec.policy!r}) is not a step of this run "
+                f"(cutoffs {[c.isoformat() for c in cutoffs]} x policies {list(policies)})"
+            )
         records[(rec.cutoff, rec.policy)] = rec
     return records
 
@@ -331,24 +363,26 @@ def run_walkforward(
     out_dir: Path,
     *,
     strategy: StrategySpec = BREAKOUT,
-    expected_hash: str | None = None,
     replayer: ChunkReplayer | None = None,
     on_step_done: Callable[[StepRecord], None] | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> WalkforwardResult:
     """Run (or resume) the walk-forward over ``weekly_cutoffs(archive, first_cutoff, n_weeks)``.
 
-    Inputs: the calibration inputs (their ``out_root`` and ``expected_hash`` are replaced per step;
-    ``inputs.descriptors`` must not read past the last cutoff), the first cutoff, the number of
-    weeks, the out dir, the strategy, the protocol hash that unlocks the reserved period, an
-    optional replayer for the calibrations (default ``default_replayer(inputs)``), a callback run
+    Inputs: the calibration inputs (their ``out_root`` is replaced per step; ``inputs.expected_hash``
+    is the protocol hash that unlocks the reserved period; ``inputs.descriptors`` must not read past
+    the last cutoff), the first cutoff, the number of weeks, the out dir, the strategy, an optional
+    replayer for the calibrations (default ``default_replayer(inputs)``), a callback run
     after each finished step and the wall clock for ``compute.max_wall_hours``.
 
-    For each cutoff, for each policy in ``walkforward.policies``: a step with a record is skipped; a
-    step named by the checkpoint's ``in_progress`` gets an ``operational_failure`` event and is rerun;
-    the reserved guard is applied to the cutoff and the activation sessions; the run stops with
-    ``archive_end`` if the activation week is not fully in the archive; otherwise ``in_progress`` is
-    set, the week is calibrated (``calibrate_week``), a ``selected`` week is replayed forward
+    The checkpoint header pins the protocol hash, data version, universe and descriptor versions,
+    strategy, first cutoff, weeks and policies; every existing record must match it and be one of
+    this run's (cutoff, policy) steps. For each cutoff, for each policy in ``walkforward.policies``:
+    a step with a record is skipped; the reserved guard is applied to the cutoff and the activation
+    sessions; the run stops with ``archive_end`` if the activation week is not fully in the archive;
+    a step named by the checkpoint's ``in_progress`` then gets an ``operational_failure`` event
+    (after the guard and the archive check, so a refused resume never logs it twice) and is rerun;
+    ``in_progress`` is set, the week is calibrated (``calibrate_week``), a ``selected`` week is replayed forward
     (``forward_replay``) from the policy's last ``equity_end`` (``walkforward.starting_cash`` for its
     first week) and a ``no_deployment`` week is recorded inactive with zero returns. Each record is
     written atomically, then ``runs.jsonl`` and the CSVs are regenerated, ``in_progress`` is cleared
@@ -358,14 +392,17 @@ def run_walkforward(
 
     Output: a ``WalkforwardResult``. Raises ReservedPeriodError before anything is written while
     ``reserved_start`` is unset, and before any calibration or replay that would read a session on
-    or after it unless the protocol is frozen and ``expected_hash`` equals its hash; ValueError when
-    an existing checkpoint header differs (naming the field). IncompleteRunError and every other
-    exception propagate with no record for the failed step (operational failure; rerun to resume).
-    Timing: each step reads data through its cutoff to decide and only then the activation week.
+    or after it unless the protocol is frozen and ``inputs.expected_hash`` equals its hash (a stop
+    at the reserved boundary: every earlier step is recorded); ValueError when an existing
+    checkpoint header differs (naming the field) or a record does not belong to the run.
+    IncompleteRunError and every other exception propagate with no record for the failed step
+    (operational failure; rerun to resume). Single writer only: nothing locks the out dir against a
+    concurrent run. Timing: each step reads data through its cutoff to decide and only then the
+    activation week.
     """
     rp = inputs.rp
     p = rp.protocol
-    guard = ReservedGuard.from_protocol(rp, expected_hash)
+    guard = ReservedGuard.from_protocol(rp, inputs.expected_hash)
     guard.require_set()
     out_dir = Path(out_dir)
     policies: list[Policy] = list(p.walkforward.policies)
@@ -373,6 +410,8 @@ def run_walkforward(
         "schema": CHECKPOINT_SCHEMA,
         "protocol_hash": rp.hash,
         "data_version": inputs.data_version,
+        "universe_version": inputs.universe.version,
+        "descriptors_version": inputs.descriptors.version,
         "strategy_id": strategy.strategy_id,
         "first_cutoff": first_cutoff.isoformat(),
         "n_weeks": int(n_weeks),
@@ -381,7 +420,7 @@ def run_walkforward(
     cutoffs = weekly_cutoffs(inputs.archive, first_cutoff, n_weeks)
     out_dir.mkdir(parents=True, exist_ok=True)
     checkpoint = _open_checkpoint(out_dir, header)
-    records = _load_records(out_dir)
+    records = _load_records(out_dir, header, cutoffs, policies)
     # A run killed between a record write and the regeneration left the outputs stale: rebuild them
     # from the records first (so even a resume that is then refused repairs them) and again at the end.
     _write_outputs(out_dir, records, policies)
@@ -395,19 +434,17 @@ def run_walkforward(
             step += 1
             if (cutoff, policy) in records:
                 continue
-            marker = {"cutoff": cutoff.isoformat(), "policy": policy}
-            if checkpoint["in_progress"] == marker:
-                _append_event(out_dir, {"kind": "operational_failure", **marker, "detected_at_step": step})
             guard.check_calibration(cutoff)
             guard.check_replay(activation)
             if not archived.issuperset(activation):
                 past_end = True
                 break
+            marker = {"cutoff": cutoff.isoformat(), "policy": policy}
+            if checkpoint["in_progress"] == marker:
+                _append_event(out_dir, {"kind": "operational_failure", **marker, "detected_at_step": step})
             checkpoint["in_progress"] = marker
             _write_checkpoint(out_dir, checkpoint)
-            step_inputs = dataclasses.replace(
-                inputs, expected_hash=expected_hash, out_root=out_dir / "artifacts" / f"{cutoff:%Y%m%d}"
-            )
+            step_inputs = dataclasses.replace(inputs, out_root=out_dir / "artifacts" / f"{cutoff:%Y%m%d}")
             outcome = calibrate_week(step_inputs, cutoff, policy, strategy, replayer=rep, clock=clock)
             prior = [r for r in records.values() if r.policy == policy and r.cutoff < cutoff]
             equity_start = max(prior, key=lambda r: r.cutoff).equity_end if prior else p.walkforward.starting_cash

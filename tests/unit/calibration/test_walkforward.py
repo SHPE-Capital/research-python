@@ -15,7 +15,7 @@ import pytest
 import shpe_research.calibration.walkforward as wf
 from shpe_research.calibration.cache import EvalCache
 from shpe_research.calibration.descriptors import PanelProxyDescriptors
-from shpe_research.calibration.reserved import ReservedPeriodError
+from shpe_research.calibration.reserved import ReservedGuard, ReservedPeriodError
 from shpe_research.calibration.universe import StaticUniverseProvider
 from shpe_research.calibration.walkforward import (
     CHECKPOINT_SCHEMA,
@@ -323,7 +323,8 @@ def _frozen(small_protocol: ResolvedProtocol, tmp_path: Path) -> ResolvedProtoco
 
 def test_frozen_with_matching_hash_allowed(archive, small_protocol, shared_cache, tmp_path) -> None:
     rp = _frozen(small_protocol, tmp_path)
-    result = _run(_inputs(archive, rp, shared_cache, n_weeks=1), tmp_path / "wf", n_weeks=1, expected_hash=rp.hash)
+    inputs = dataclasses.replace(_inputs(archive, rp, shared_cache, n_weeks=1), expected_hash=rp.hash)
+    result = _run(inputs, tmp_path / "wf", n_weeks=1)
     assert result.stopped == "complete"
     assert len(result.records) == 3
     assert all(r.protocol_hash == rp.hash and r.activation[-1] >= date(2024, 5, 14) for r in result.records)
@@ -333,8 +334,96 @@ def test_frozen_with_wrong_hash_refused(archive, small_protocol, shared_cache, t
     _no_calibration(monkeypatch)
     rp = _frozen(small_protocol, tmp_path)
     with pytest.raises(ReservedPeriodError):
-        _run(_inputs(archive, rp, shared_cache, n_weeks=1), tmp_path / "wf", n_weeks=1, expected_hash="0" * 64)
+        inputs = dataclasses.replace(_inputs(archive, rp, shared_cache, n_weeks=1), expected_hash="0" * 64)
+        _run(inputs, tmp_path / "wf", n_weeks=1)
     assert not list((tmp_path / "wf" / "records").glob("*.json"))
+
+
+def test_run_walkforward_has_one_expected_hash_path() -> None:
+    import inspect
+
+    assert "expected_hash" not in inspect.signature(run_walkforward).parameters
+
+
+def test_guard_allows_calibration(small_protocol, tmp_path) -> None:
+    rp = _protocol("walkforward.reserved_start=2024-05-17")
+    guard = ReservedGuard.from_protocol(rp, None)
+    assert guard.allows_calibration(date(2024, 5, 16))
+    assert not guard.allows_calibration(date(2024, 5, 17))
+    frozen = _frozen(small_protocol, tmp_path)
+    assert ReservedGuard.from_protocol(frozen, frozen.hash).allows_calibration(date(2024, 6, 28))
+    assert not ReservedGuard.from_protocol(frozen, None).allows_calibration(date(2024, 6, 28))
+    unset = _protocol("walkforward.reserved_start=null")
+    assert ReservedGuard.from_protocol(unset, None).allows_calibration(date(2024, 6, 28))
+
+
+def test_refused_resume_does_not_duplicate_operational_failure(archive, shared_cache, tmp_path, monkeypatch) -> None:
+    _no_calibration(monkeypatch)
+    rp = _protocol("walkforward.reserved_start=2024-05-17")
+    first = date(2024, 5, 17)
+    out = tmp_path / "wf"
+    inputs = _inputs(archive, rp, shared_cache, first=first)
+    with pytest.raises(ReservedPeriodError):
+        _run(inputs, out, first=first)
+    checkpoint = json.loads((out / "checkpoint.json").read_text(encoding="utf-8"))
+    checkpoint["in_progress"] = {"cutoff": "2024-05-17", "policy": "uniform"}
+    (out / "checkpoint.json").write_text(json.dumps(checkpoint), encoding="utf-8")
+    for _ in range(2):
+        with pytest.raises(ReservedPeriodError):
+            _run(inputs, out, first=first)
+    assert not (out / "events.jsonl").exists()
+
+
+# ------------------------------------------------------------------------------ resume header
+
+
+def test_header_pins_universe_and_descriptor_versions(archive, small_protocol, shared_cache, clean, tmp_path) -> None:
+    checkpoint = json.loads((clean.out_dir / "checkpoint.json").read_text(encoding="utf-8"))
+    inputs = _inputs(archive, small_protocol, shared_cache)
+    assert checkpoint["universe_version"] == inputs.universe.version
+    assert checkpoint["descriptors_version"] == inputs.descriptors.version
+    out = tmp_path / "wf"
+    out.mkdir()
+    shutil.copy(clean.out_dir / "checkpoint.json", out / "checkpoint.json")
+    other = dataclasses.replace(inputs, universe=StaticUniverseProvider.from_archive(archive, version="other"))
+    with pytest.raises(ValueError, match="universe_version"):
+        _run(other, out)
+    other = dataclasses.replace(
+        inputs,
+        descriptors=PanelProxyDescriptors(
+            archive, lookback=small_protocol.protocol.weights.descriptor_lookback + 1, through=FIRST
+        ),
+    )
+    with pytest.raises(ValueError, match="descriptors_version"):
+        _run(other, out)
+
+
+def _copy_run(src: Path, dst: Path) -> None:
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("artifacts"))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "match"),
+    [
+        ("protocol_hash", "f" * 64, "protocol_hash"),
+        ("data_version", "synth-8", "data_version"),
+        ("strategy_id", "other", "strategy_id"),
+        ("cutoff", "2024-04-26", "not a step"),
+        ("policy", "bogus", "not a step"),
+    ],
+)
+def test_resume_refuses_foreign_record(
+    archive, small_protocol, shared_cache, clean, tmp_path, monkeypatch, field, value, match
+) -> None:
+    _no_calibration(monkeypatch)
+    out = tmp_path / "wf"
+    _copy_run(clean.out_dir, out)
+    path = sorted((out / "records").glob("*.json"))[0]
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec[field] = value
+    path.write_text(json.dumps(rec), encoding="utf-8")
+    with pytest.raises(ValueError, match=match):
+        _run(_inputs(archive, small_protocol, shared_cache), out)
 
 
 # ------------------------------------------------------------------------------ CLI
@@ -382,6 +471,24 @@ def test_cli_walkforward_reserved_exit_code(synth_archive_root, tmp_path, capsys
     assert "reserved" in capsys.readouterr().err.lower()
     assert main(_cli_args(synth_archive_root, tmp_path / "wf2", "walkforward.reserved_start=null")) == 2
     assert "reserved_start" in capsys.readouterr().err
+
+
+def test_cli_walkforward_reserved_boundary_stop(synth_archive_root, tmp_path, capsys) -> None:
+    # Week 1 (activation 2024-05-13..17) runs; week 2's activation reaches reserved_start: a boundary stop.
+    out = tmp_path / "wf"
+    args = [*_cli_args(synth_archive_root, out, "walkforward.reserved_start=2024-05-20"), "--policies", "uniform"]
+    assert main(args) == 2
+    err = capsys.readouterr().err
+    assert "boundary" in err.lower() and "2024-05-20" in err
+    assert "rerun the same command to resume" not in err
+    assert len(_records(out)) == 1
+
+
+def test_cli_walkforward_insufficient_history_exit_code(synth_archive_root, tmp_path, capsys) -> None:
+    args = _cli_args(synth_archive_root, tmp_path / "wf")
+    args[args.index("--first-cutoff") + 1] = "2024-01-12"
+    assert main(args) == 2
+    assert "InsufficientHistoryError" in capsys.readouterr().err
 
 
 def test_cli_walkforward_needs_one_strategy(synth_archive_root, tmp_path) -> None:

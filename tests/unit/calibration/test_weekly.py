@@ -464,6 +464,11 @@ def test_cli_reserved_exit_code(synth_archive_root, tmp_path, capsys) -> None:
     assert "reserved" in capsys.readouterr().err.lower()
 
 
+def test_cli_insufficient_history_exit_code(synth_archive_root, tmp_path, capsys) -> None:
+    assert main(_cli_args(synth_archive_root, tmp_path, cutoff="2024-01-12")) == 2
+    assert "InsufficientHistoryError" in capsys.readouterr().err
+
+
 def _record_chunk_reads(monkeypatch) -> list[Path]:
     """Record every chunk opened by the descriptors and by panel assembly."""
     import shpe_research.calibration.descriptors as descriptors_mod

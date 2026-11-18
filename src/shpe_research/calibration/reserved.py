@@ -48,13 +48,21 @@ class ReservedGuard:
         if self.reserved_start is None:
             raise ReservedPeriodError("walkforward.reserved_start is not set; declare it before any evaluation")
 
+    def allows_calibration(self, cutoff: date) -> bool:
+        """True if ``check_calibration(cutoff)`` would pass.
+
+        Input: a decision cutoff. Output: False only when ``reserved_start`` is set, the cutoff is on
+        or after it and the guard is not unlocked. Pure; reads no data.
+        """
+        return self.reserved_start is None or cutoff < self.reserved_start or self.unlocked()
+
     def check_calibration(self, cutoff: date) -> None:
         """Refuse a calibration whose decision cutoff is on or after ``reserved_start`` unless unlocked.
 
         Input: the cutoff session (every session the calibration reads is on or before it). Raises
         ReservedPeriodError; does nothing when ``reserved_start`` is None.
         """
-        if self.reserved_start is not None and cutoff >= self.reserved_start and not self.unlocked():
+        if not self.allows_calibration(cutoff):
             raise ReservedPeriodError(
                 f"cutoff {cutoff} is in the reserved period (from {self.reserved_start}); "
                 "freeze the protocol and pass its hash to read it"

@@ -336,13 +336,8 @@ def _momentum_calibrate(args: argparse.Namespace) -> int:
     from shpe_research.calibration.scheduler import run_strategies
     from shpe_research.calibration.strategies import load_strategies
     from shpe_research.calibration.universe import StaticUniverseProvider
-    from shpe_research.calibration.weekly import (
-        CalibrationInputs,
-        IncompleteRunError,
-        StaleArchiveError,
-        guarded_cutoff,
-    )
-    from shpe_research.calibration.window import Archive
+    from shpe_research.calibration.weekly import CalibrationInputs, IncompleteRunError, guarded_cutoff
+    from shpe_research.calibration.window import Archive, InsufficientHistoryError
     from shpe_research.config.momentum import load_protocol
 
     rp = load_protocol(args.protocol, args.set)
@@ -366,7 +361,7 @@ def _momentum_calibrate(args: argparse.Namespace) -> int:
             outcomes, _ = run_strategies(inputs, args.cutoff, args.policy, load_strategies(rp))
         finally:
             cache.close()
-    except (IncompleteRunError, ReservedPeriodError, StaleArchiveError) as exc:
+    except (IncompleteRunError, ReservedPeriodError, InsufficientHistoryError) as exc:  # incl. StaleArchiveError
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     for outcome in outcomes.values():
@@ -375,6 +370,15 @@ def _momentum_calibrate(args: argparse.Namespace) -> int:
 
 
 def _momentum_walkforward(args: argparse.Namespace) -> int:
+    """``shpe momentum walkforward``: run or resume the D8 walk-forward.
+
+    Exit codes: 0 on ``complete`` or ``archive_end``; 2 with a message on stderr for
+    IncompleteRunError (rerunning the same command resumes), InsufficientHistoryError (including
+    StaleArchiveError: fix the archive or the first cutoff) and ReservedPeriodError. A
+    ReservedPeriodError while ``reserved_start`` is set is a stop at the reserved boundary, not a
+    failure: every earlier step is recorded and rerunning goes no further unless the protocol is
+    frozen and ``--protocol-hash`` matches. Exit 2 keeps the code the D8 brief fixes for it.
+    """
     from shpe_research.calibration.cache import EvalCache
     from shpe_research.calibration.descriptors import PanelProxyDescriptors
     from shpe_research.calibration.reserved import ReservedGuard, ReservedPeriodError
@@ -382,7 +386,7 @@ def _momentum_walkforward(args: argparse.Namespace) -> int:
     from shpe_research.calibration.universe import StaticUniverseProvider
     from shpe_research.calibration.walkforward import run_walkforward, weekly_cutoffs
     from shpe_research.calibration.weekly import CalibrationInputs, IncompleteRunError
-    from shpe_research.calibration.window import Archive
+    from shpe_research.calibration.window import Archive, InsufficientHistoryError
     from shpe_research.config.momentum import load_protocol
 
     overrides = list(args.set)
@@ -403,7 +407,7 @@ def _momentum_walkforward(args: argparse.Namespace) -> int:
         if not cutoffs:
             raise ValueError(f"the archive has no session in the ISO week of {args.first_cutoff}")
         guard.check_calibration(cutoffs[0])
-        through = max(c for c in cutoffs if _calibration_allowed(guard, c))
+        through = max(c for c in cutoffs if guard.allows_calibration(c))
         cache = EvalCache(_momentum_cache_path(p), busy_timeout_s=p.cache.busy_timeout_s)
         try:
             inputs = CalibrationInputs(
@@ -416,32 +420,28 @@ def _momentum_walkforward(args: argparse.Namespace) -> int:
                 out_root=args.out / "artifacts",
                 expected_hash=args.protocol_hash,
             )
-            result = run_walkforward(
-                inputs,
-                args.first_cutoff,
-                args.weeks,
-                args.out,
-                strategy=strategies[0],
-                expected_hash=args.protocol_hash,
-            )
+            result = run_walkforward(inputs, args.first_cutoff, args.weeks, args.out, strategy=strategies[0])
         finally:
             cache.close()
-    except (IncompleteRunError, ReservedPeriodError) as exc:
+    except ReservedPeriodError as exc:
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        if guard.reserved_start is not None:
+            print(
+                f"stopped at the reserved-period boundary ({guard.reserved_start}): this is a boundary stop, "
+                f"not a failure; the steps before it are recorded in {args.out}. Rerunning goes no further "
+                "unless the protocol is frozen and --protocol-hash matches.",
+                file=sys.stderr,
+            )
+        return 2
+    except IncompleteRunError as exc:
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         print("rerun the same command to resume", file=sys.stderr)
         return 2
+    except InsufficientHistoryError as exc:  # incl. StaleArchiveError
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
     print(f"{result.stopped}: {len(result.records)} steps; daily account series in {result.out_dir / 'daily'}")
     return 0
-
-
-def _calibration_allowed(guard, cutoff) -> bool:
-    from shpe_research.calibration.reserved import ReservedPeriodError
-
-    try:
-        guard.check_calibration(cutoff)
-    except ReservedPeriodError:
-        return False
-    return True
 
 
 def _policies(value: str) -> list[str]:
