@@ -225,6 +225,30 @@ def test_kill_after_artifact_before_record(archive, small_protocol, shared_cache
     _assert_same_outputs(tmp_path / "wf", clean.out_dir)
 
 
+def test_kill_after_last_record_before_outputs(
+    archive, small_protocol, shared_cache, clean, tmp_path, monkeypatch
+) -> None:
+    inputs = _inputs(archive, small_protocol, shared_cache)
+    real = wf._write_outputs
+    killed = {"done": False}
+
+    def flaky(out_dir: Path, records, policies) -> None:
+        if len(records) == 9 and not killed["done"]:  # the last step's regeneration
+            killed["done"] = True
+            raise _Kill
+        real(out_dir, records, policies)
+
+    monkeypatch.setattr(wf, "_write_outputs", flaky)
+    with pytest.raises(_Kill):
+        _run(inputs, tmp_path / "wf")
+    assert len(list((tmp_path / "wf" / "records").glob("*.json"))) == 9
+    assert len(_runs(tmp_path / "wf")) == 8  # stale: the last record is missing from the outputs
+    resumed: list[StepRecord] = []
+    result = _run(inputs, tmp_path / "wf", on_step_done=resumed.append)
+    assert resumed == [] and result.stopped == "complete"
+    _assert_same_outputs(tmp_path / "wf", clean.out_dir)
+
+
 def test_header_mismatch_refuses_resume(archive, small_protocol, shared_cache, clean, tmp_path) -> None:
     out = tmp_path / "wf"
     out.mkdir()

@@ -352,7 +352,9 @@ def run_walkforward(
     (``forward_replay``) from the policy's last ``equity_end`` (``walkforward.starting_cash`` for its
     first week) and a ``no_deployment`` week is recorded inactive with zero returns. Each record is
     written atomically, then ``runs.jsonl`` and the CSVs are regenerated, ``in_progress`` is cleared
-    and ``on_step_done`` is called.
+    and ``on_step_done`` is called. The outputs are also regenerated from ``records/`` when the run
+    starts and before it returns, so a kill between a record write and the regeneration never leaves
+    them stale.
 
     Output: a ``WalkforwardResult``. Raises ReservedPeriodError before anything is written while
     ``reserved_start`` is unset, and before any calibration or replay that would read a session on
@@ -380,6 +382,9 @@ def run_walkforward(
     out_dir.mkdir(parents=True, exist_ok=True)
     checkpoint = _open_checkpoint(out_dir, header)
     records = _load_records(out_dir)
+    # A run killed between a record write and the regeneration left the outputs stale: rebuild them
+    # from the records first (so even a resume that is then refused repairs them) and again at the end.
+    _write_outputs(out_dir, records, policies)
     rep = replayer if replayer is not None else default_replayer(inputs)
     archived = set(inputs.archive.sessions)
     past_end = False
@@ -444,8 +449,7 @@ def run_walkforward(
                 on_step_done(rec)
         if past_end:
             break
-    if not (out_dir / "runs.jsonl").exists():
-        _write_outputs(out_dir, records, policies)
+    _write_outputs(out_dir, records, policies)  # idempotent; the outputs always match records/
     # archive_end: an activation week past the archive, or fewer archive weeks than requested
     stopped: Literal["complete", "archive_end"] = "archive_end" if past_end or len(cutoffs) < n_weeks else "complete"
     return WalkforwardResult(records=tuple(_ordered(records, policies)), stopped=stopped, out_dir=out_dir)
