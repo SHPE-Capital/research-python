@@ -193,3 +193,4 @@ Existing R1–R5 keep their IDs; new team studies use `RM<n>` (momentum),
 | R3 | Pair selection by clustering, then spread entry meta-labeling | Stat arb | F7, D4 | `studies/stat-arb/r3-pairs-clustering/` |
 | R4 | Order-flow imbalance and short-horizon midpoint prediction | Reversals | D3, F6 | `studies/reversals/r4-microstructure-ofi/` |
 | R5 | Transaction cost analysis: paper fills vs. backtest assumptions | Any | Platform broker ledger | `studies/shared/r5-tca/` |
+| RM9 | Weekly momentum calibration: uniform vs. recency vs. similar histories; runnable demo, real-data pilot and cluster verification pending | Momentum | Breakout grid, minute signals, funded account, weekly config contract | [Research and operations guide](../studies/momentum/rm9-weekly-calibration/) |
