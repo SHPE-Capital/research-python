@@ -183,6 +183,16 @@ def _sort_candidates(keys, syms, n):
 
 
 @njit(cache=True, nogil=True)
+def _quote_rate(table, cell, side, m, length, qty, typical, impact):
+    # Table: cell, open/mid/close, buy/sell, [one-second adverse bps, displayed shares].
+    b = 0 if m < 30 else (2 if m >= length - 30 else 1)
+    spread, depth = table[cell, b, side, 0], table[cell, b, side, 1]
+    # Only the quote sample estimates spreads/depth. Size impact is a declared scenario assumption.
+    premium = impact * (max(qty / depth - 1., 0.) + qty / max(typical, 1.) * 100.)
+    return min(0.95, (spread + premium) / 10000.)
+
+
+@njit(cache=True, nogil=True)
 def _kernel(
     open_, high_, low_, close_, vol_, atr_, ev_off, ev_sym, entry_score, use_thr, thr,
     starts, lens, rk, warmup, max_pos, lookback, min_obs, cb, markup,
@@ -190,6 +200,7 @@ def _kernel(
     starting_cash, ref_equity, use_ref, halt_pct, per_stock_pct, risk_pct, exposure_cap, liq_pct, mult,
     record, led_i, led_f, rej_i,
     daily, sess_trades, counters, rej_counts, by_stock,
+    quote_mode, table, cells, liquidity, impact, cost_dollars,
 ):
     """Hot loop. ``counters`` = [ambiguous, unresolved, n_ledger, n_rej_records]."""
     n_sym = open_.shape[0]
@@ -249,18 +260,23 @@ def _kernel(
                         rej_i[n_rej, 0], rej_i[n_rej, 1], rej_i[n_rej, 2] = sym, t, R_NO_BAR
                         n_rej += 1
                     continue
-                if nxt > o_limit[k]:
+                qty = o_qty[k]
+                executed = nxt
+                if quote_mode:
+                    executed = nxt * (1 + _quote_rate(table, cells[sym], 0, m, length, qty, liquidity[sym, t], impact))
+                if executed > o_limit[k]:
                     rej_counts[R_CANCEL] += 1
                     if record:
                         rej_i[n_rej, 0], rej_i[n_rej, 1], rej_i[n_rej, 2] = sym, t, R_CANCEL
                         n_rej += 1
                     continue
-                px = nxt
+                px = executed
                 j = 0
                 while p_sym[j] >= 0:
                     j += 1
                 qty = o_qty[k]
                 fee = qty * px * cb
+                cost_dollars[di] += qty * (px - nxt) + fee
                 cash -= qty * px + fee
                 a = o_atr[k]
                 p_sym[j], p_qty[j], p_entry[j], p_atr[j] = sym, qty, px, a
@@ -312,6 +328,10 @@ def _kernel(
                                 p_last[j] = pc
                     if reason >= 0:
                         qty = p_qty[j]
+                        raw_exit = xpx
+                        if quote_mode:
+                            xpx *= 1 - _quote_rate(table, cells[sym], 1, m, length, qty, liquidity[sym, t], impact)
+                        cost_dollars[di] += qty * (raw_exit - xpx + xpx * cb)
                         cash += qty * xpx * (1.0 - cb)
                         pnl = qty * (xpx - p_entry[j]) - p_cost[j] - qty * xpx * cb
                         by_stock[sym] += abs(pnl)
@@ -369,20 +389,23 @@ def _kernel(
                         n_rej += 1
                     continue
                 limit = price * (1.0 + markup)
-                nv = 0
-                for q in range(1, lookback + 1):
-                    ps = s - q
-                    if ps < 0:
-                        break
-                    if m < lens[ps]:
-                        v = np.float64(vol_[sym, starts[ps] + m])
-                        if v == v:
-                            buf[nv] = v
-                            nv += 1
-                liq = _liquidity_cap(buf, nv, liq_pct, min_obs)
+                if quote_mode:
+                    liq = liq_pct * liquidity[sym, t]
+                else:
+                    nv = 0
+                    for q in range(1, lookback + 1):
+                        ps = s - q
+                        if ps < 0:
+                            break
+                        if m < lens[ps]:
+                            v = np.float64(vol_[sym, starts[ps] + m])
+                            if v == v:
+                                buf[nv] = v
+                                nv += 1
+                    liq = _liquidity_cap(buf, nv, liq_pct, min_obs)
                 unit = limit * (1.0 + cb)
                 qty_i, cap = _size_order(
-                    equity, price, stop_atr * a, cash - reserved, unit,
+                    equity, limit if quote_mode else price, stop_atr * a, cash - reserved, unit,
                     pos_value + pend_notional, liq, per_stock_pct, risk_pct, exposure_cap, mult,
                 )
                 if qty_i <= 0:
@@ -404,6 +427,11 @@ def _kernel(
             if sym >= 0:
                 qty = p_qty[j]
                 xpx = p_last[j]
+                raw_exit = xpx
+                if quote_mode:
+                    xpx *= 1 - _quote_rate(table, cells[sym], 1, length - 1, length, qty,
+                                            liquidity[sym, c0 + length - 1], impact)
+                cost_dollars[di] += qty * (raw_exit - xpx + xpx * cb)
                 cash += qty * xpx * (1.0 - cb)
                 pnl = qty * (xpx - p_entry[j]) - p_cost[j] - qty * xpx * cb
                 by_stock[sym] += abs(pnl)
@@ -446,6 +474,7 @@ def _validate(prep: PreparedPanel, mask: SignalMask, cfg: AccountConfig, warmup:
 def simulate_account_fast(
     panel: MarketPanel | PreparedPanel, mask: SignalMask, cfg: AccountConfig, *,
     warmup_sessions: int = 0, entry_score: np.ndarray | None = None, return_ledger: bool = False,
+    quote_inputs: tuple | None = None, diagnostics: dict | None = None,
 ) -> AccountResult:
     """Numba replay with the oracle's inputs and outputs.
 
@@ -480,6 +509,17 @@ def simulate_account_fast(
     rej_counts = np.zeros(N_REJECT, dtype=np.int64)
     by_stock = np.zeros(n_sym)
 
+    quoted = quote_inputs is not None
+    if quoted:
+        table, cells, liquidity, impact = quote_inputs
+        if (table.shape != (9, 3, 2, 2) or cells.shape != (n_sym,) or liquidity.shape != (n_sym, n_min)
+            or not np.isfinite(table).all() or np.any(table[..., 1] <= 0) or np.any(table[..., 0] < 0)
+            or np.any(cells < 0) or np.any(cells >= 9) or cfg.cost_bps != 0):
+            raise ValueError("invalid quote table/cell inputs or overlapping flat charge")
+    else:
+        table, cells = np.ones((1, 1, 1, 2)), np.zeros(1, dtype=np.int64)
+        liquidity, impact = np.zeros((1, 1), dtype=np.float32), 0.
+    cost_dollars = np.zeros(n_out)
     _kernel(
         prep.open, prep.high, prep.low, prep.close, prep.volume, atr, ev_off, ev_sym, es, thr is not None,
         float(thr) if thr is not None else 0.0,
@@ -492,8 +532,11 @@ def simulate_account_fast(
         cfg.total_exposure_cap, cfg.liquidity_cap_pct,
         1.0 if cfg.size_multiplier is None else float(cfg.size_multiplier),
         return_ledger, led_i, led_f, rej_i,
-        daily, sess_trades, counters, rej_counts, by_stock,
+        daily, sess_trades, counters, rej_counts, by_stock, quoted, table, cells, liquidity, impact, cost_dollars,
     )
+    if diagnostics is not None:
+        diagnostics.update(costs=cost_dollars.tolist(), daily_trades=sess_trades.tolist(),
+                           rejections=dict(zip(REJECT_REASONS, rej_counts.tolist(), strict=True)))
     ambiguous, unresolved, n_led, n_rej = (int(x) for x in counters)
     ids = prep.panel.asset_ids
     ledger: tuple[LedgerEntry, ...] = ()
